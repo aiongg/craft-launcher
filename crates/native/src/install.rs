@@ -670,11 +670,17 @@ fn with_absolute_program(dirs: &[impl AsRef<Path>], args: &[&std::ffi::OsStr]) -
     Ok(std::iter::once(program.into_os_string()).chain(rest.iter().map(|a| a.to_os_string())).collect())
 }
 
+/// polkit's `pkexec`, from the same directories as the programs it runs.
+#[cfg(any(target_os = "linux", target_os = "freebsd"))]
+fn pkexec() -> Option<PathBuf> {
+    find_in(&SYSTEM_BIN_DIRS, std::ffi::OsStr::new("pkexec"))
+}
+
 /// Runs a command as root through polkit (`pkexec`), which shows the desktop's password prompt.
 #[cfg(any(target_os = "linux", target_os = "freebsd"))]
 fn run_as_root(args: &[&std::ffi::OsStr]) -> Result<(), String> {
     let args = with_absolute_program(&SYSTEM_BIN_DIRS, args)?;
-    let pkexec = which("pkexec").ok_or("installing system-wide needs polkit (pkexec), which isn't installed")?;
+    let pkexec = pkexec().ok_or("installing system-wide needs polkit (pkexec), which isn't installed")?;
     let status = process::command(pkexec).args(&args).status().map_err(|e| format!("couldn't ask for permission ({e})"))?;
     root_outcome(status.code())
 }
@@ -805,7 +811,7 @@ pub(crate) mod linux {
         let flatpak = process::is_flatpak_available();
         let is_flatpak = process::in_sandbox();
         let is_appimage = std::env::var_os("APPIMAGE").is_some();
-        let root = which("pkexec").is_some();
+        let root = pkexec().is_some();
         let os = ["/etc/os-release", "/usr/lib/os-release"].iter().find_map(|p| std::fs::read_to_string(p).ok()).unwrap_or_default();
         let native = distro::native_package(&distro::parse_os_release(&os));
         // An ostree system can't take .deb or .rpm installs, whatever os-release says.
@@ -1418,7 +1424,7 @@ mod freebsd {
         let rel = tree::files(&tree);
         let mut source = tree.into_os_string();
         source.push("/.");
-        if which("pkexec").is_some() {
+        if pkexec().is_some() {
             let prefix = PathBuf::from("/usr/local");
             run_as_root(&[OsStr::new("/bin/cp"), OsStr::new("-R"), &source, prefix.as_os_str()])?;
             return Ok((prefix.join("bin").join(app.id), rel.iter().map(|r| prefix.join(r)).collect(), true));
