@@ -646,8 +646,11 @@ fn which(name: &str) -> Option<PathBuf> {
 
 /// The root-owned directories that programs run as root come from. `pkexec` looks a bare program
 /// name up on the caller's `PATH`, so it is always handed an absolute path from one of these.
-#[cfg(any(target_os = "linux", target_os = "freebsd"))]
+#[cfg(target_os = "linux")]
 const SYSTEM_BIN_DIRS: [&str; 4] = ["/usr/bin", "/bin", "/usr/sbin", "/sbin"];
+/// FreeBSD's packages, polkit's `pkexec` among them, install under `/usr/local`.
+#[cfg(target_os = "freebsd")]
+const SYSTEM_BIN_DIRS: [&str; 6] = ["/usr/bin", "/bin", "/usr/sbin", "/sbin", "/usr/local/bin", "/usr/local/sbin"];
 
 /// `name` in the first of `dirs` that has it.
 #[cfg(any(target_os = "linux", target_os = "freebsd"))]
