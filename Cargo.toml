@@ -25,7 +25,7 @@ eframe = { version = "0.37", default-features = false }
 egui_extras = { version = "0.37", default-features = false }
 egui_kittest = "0.37"
 # Only its `fonts` and `ime` modules; the defaults add colour glyphs and installed system fonts.
-craft-ui = { git = "https://github.com/aiongg/craft-libs", branch = "lang-integration" }
+craft-ui = { git = "https://github.com/aiongg/craft-libs", rev = "bcea5303b2ecbeb58211c95a5fb50ac1ccf9f70c" }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 semver = { version = "1", features = ["serde"] }
