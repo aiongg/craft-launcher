@@ -35,6 +35,10 @@ jiff = "0.2"
 js-sys = "0.3"
 wasm-bindgen = "0.2"
 
+[build-dependencies]
+# Cuts craft-fonts' Chinese and Japanese interface faces to the catalogs' characters (build.rs).
+craft-fonts-build = { workspace = true, features = ["subset"] }
+
 [dev-dependencies]
 serde_json = { workspace = true }
 egui_kittest = { workspace = true, features = ["wgpu", "snapshot"] }

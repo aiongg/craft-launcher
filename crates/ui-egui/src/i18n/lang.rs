@@ -5,10 +5,11 @@ use std::sync::OnceLock;
 use super::catalog::Catalog;
 use super::detect::system_lang;
 
-/// The writing system a language is drawn in, and so the system font it needs. Languages that
-/// share one can share a face; Simplified and Traditional Chinese do not (they want different
-/// faces), so each script is its own. The bundled faces have no CJK glyphs, so a language with a
-/// script is drawn with the system's fonts (`crate::theme::font_stack`).
+/// The writing system a language is drawn in, and so the CJK face it needs. Languages that share
+/// one can share a face; Simplified and Traditional Chinese do not (they want different faces), so
+/// each script is its own. The bundled faces have no CJK glyphs, so a language with a script is
+/// drawn with craft-fonts' interface face for it, or the system's fonts in a build without one
+/// (`crate::theme::font_stack`).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Script {
     Chinese,
@@ -18,6 +19,14 @@ pub enum Script {
 impl Script {
     /// Every script a language can be written in.
     pub const ALL: [Script; 2] = [Script::Chinese, Script::Japanese];
+
+    /// The craft-fonts script tag of its interface face.
+    pub fn tag(self) -> &'static str {
+        match self {
+            Script::Chinese => "Hans",
+            Script::Japanese => "Jpan",
+        }
+    }
 }
 
 /// One supported UI language.
@@ -29,7 +38,7 @@ pub struct LangInfo {
     pub name: &'static str,
     /// The language's name in English, shown instead where its own script can't be drawn.
     pub english_name: &'static str,
-    /// The writing system this language is drawn in, or `None` if it needs no system CJK font.
+    /// The writing system this language is drawn in, or `None` if it needs no CJK face.
     pub script: Option<Script>,
     /// Catalog file contents (empty for the built-in English).
     pub source: &'static str,

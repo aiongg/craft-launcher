@@ -2,7 +2,8 @@
 //! display type, Inter body text and Geist Mono labels. Widgets read [`Tokens::get`]; nothing
 //! hard-codes a colour.
 
-use craft_ui::fonts::{Family, I18nScripts, Stack, UiFonts};
+// The generated table is written as `EmbeddedFace` literals, which craft-ui's `CraftFace` matches.
+use craft_ui::fonts::{CraftFace as EmbeddedFace, Family, I18nScripts, Stack, UiFonts};
 use egui::epaint::text::VariationCoords;
 use egui::{Color32, CornerRadius, FontData, FontFamily, FontId, FontTweak, Stroke, TextStyle, Visuals};
 use serde::{Deserialize, Serialize};
@@ -288,6 +289,10 @@ pub fn mono_bold() -> FontFamily {
     FontFamily::Name("mono-bold".into())
 }
 
+/// craft-fonts' Chinese and Japanese interface faces, cut to the catalogs' characters (build.rs);
+/// empty unless built with `CRAFT_FONTS_DIR`, and on the web.
+static CRAFT_FONTS: &[EmbeddedFace] = include!(concat!(env!("OUT_DIR"), "/craft_fonts.rs"));
+
 /// The bundled body font (Inter), whose baseline installed fonts are nudged onto.
 const INTER: &[u8] = include_bytes!("../../../assets/fonts/Inter-Variable.ttf");
 
@@ -329,6 +334,7 @@ pub fn font_stack(cjk: Option<Lang>) -> Stack {
         }
         fonts = fonts.app_face(name, FontData::from_static(bytes).tweak(tweak), &[family]);
     }
+    fonts = fonts.craft_faces(CRAFT_FONTS);
     #[cfg(not(target_arch = "wasm32"))]
     {
         fonts = fonts.system_provider(system_fonts::provider(cjk));
@@ -340,6 +346,12 @@ pub fn font_stack(cjk: Option<Lang>) -> Stack {
 /// leads the search for characters the bundled faces lack, or `None`.
 pub fn install_fonts(ctx: &egui::Context, cjk: Option<Lang>) {
     font_stack(cjk).install(ctx);
+}
+
+/// Does this build embed an interface face for the CJK language `lang`? Desktop builds made with
+/// `CRAFT_FONTS_DIR` do; then the system's fonts are never searched for it.
+pub fn cjk_font_embedded(lang: Lang) -> bool {
+    lang.script().is_some_and(|script| CRAFT_FONTS.iter().any(|face| face.scripts.contains(&script.tag())))
 }
 
 /// Has the system font for `lang` already been looked for and found? Never looks.
@@ -355,17 +367,20 @@ pub fn cjk_font_loaded(lang: Lang) -> bool {
     }
 }
 
-/// Can the CJK language `lang` be drawn? Looks through the system's fonts on the first call.
-/// The web build has none, so CJK text can't be drawn there. A font for another CJK language
-/// doesn't count: it leaves this one's own characters as tofu, so the language stays in English.
+/// Can the CJK language `lang` be drawn? With no embedded face for it, looks through the system's
+/// fonts on the first call. The web build has neither, so CJK text can't be drawn there. A font
+/// for another CJK language doesn't count: it leaves this one's own characters as tofu, so the
+/// language stays in English.
 pub fn cjk_font_available(lang: Lang) -> bool {
+    if cjk_font_embedded(lang) {
+        return true;
+    }
     #[cfg(not(target_arch = "wasm32"))]
     {
         system_fonts::available(lang)
     }
     #[cfg(target_arch = "wasm32")]
     {
-        let _ = lang;
         false
     }
 }
@@ -466,11 +481,13 @@ mod tests {
     /// themselves. egui's own faces had these symbols until 0.37.
     const UNUSED: [&str; 3] = ["⊞  Grid", "☰  Table", "🔍  Search apps"];
 
-    /// The bundled faces draw every string of every catalog in a language they cover, and every
-    /// language's own name in the picker, without any system font.
+    /// The bundled and embedded faces draw every string of every catalog in a language they cover,
+    /// and that language's own name in the picker, without any system font. CJK catalogs count when
+    /// the build embeds their interface face (built with `CRAFT_FONTS_DIR`).
     #[test]
     fn bundled_faces_cover_every_shipped_string() {
-        let samples = LANGUAGES.iter().filter(|info| info.script.is_none()).flat_map(|info| {
+        let embedded = |code| Lang::from_code(code).is_some_and(cjk_font_embedded);
+        let samples = LANGUAGES.iter().filter(|info| info.script.is_none() || embedded(info.code)).flat_map(|info| {
             let strings = info.source.lines().filter(|line| !line.starts_with('#')).filter_map(|line| {
                 let mut columns = line.split('\t');
                 let source = columns.nth(1).filter(|source| !UNUSED.contains(source))?;

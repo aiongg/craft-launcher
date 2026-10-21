@@ -100,9 +100,12 @@ Chinese locales (`zh-CN`, `zh-SG`, `zh-Hans`, and POSIX forms such as `zh_CN.UTF
 Chinese; Traditional Chinese ones don't. To try a language without changing the setting, start the
 desktop app with `ARTCRAFT_LAUNCHER_LOCALE=pt-BR`, or add `?lang=ru` to the web address.
 
-The CJK languages are drawn with the system's own CJK fonts, found through the system's font
-fallback (CoreText, DirectWrite, fontconfig). Where the system has no font for one, and in the web version, the interface stays in
-English and Settings says why. Product names and release notes stay as published; text without a
+The CJK languages are drawn with craft-fonts' interface faces (Noto Sans SC UI, BIZ UDPGothic),
+cut at build time to the characters the catalogs use (about 0.4 MB each). A desktop build gets them
+when `CRAFT_FONTS_DIR` names a [craft-fonts](https://github.com/storytold/craft-fonts) checkout;
+without one it uses the system's own CJK fonts, found through the system's font fallback
+(CoreText, DirectWrite, fontconfig). Where neither has a font for one, and in the web version, the
+interface stays in English and Settings says why. Product names and release notes stay as published; text without a
 translation falls back to English.
 
 ## Where apps are installed
@@ -192,6 +195,7 @@ You need a recent stable Rust (1.90 or newer). On Linux, install the windowing h
 git clone https://github.com/storytold/craft-launcher
 cd craft-launcher
 cargo run --release -p artcraft-launcher   # the desktop app
+CRAFT_FONTS_DIR=/path/to/craft-fonts cargo run --release -p artcraft-launcher   # with the CJK faces
 cargo xtask ci                             # fmt, clippy, tests and the wasm check
 ```
 
