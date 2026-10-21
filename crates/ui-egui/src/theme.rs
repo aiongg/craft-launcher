@@ -460,6 +460,46 @@ mod tests {
         assert_covers(&font_stack(None), samples);
     }
 
+    /// Text no catalog has, typed into a field: a rare Han character, a Vietnamese letter and the
+    /// Command key. Drawing it never panics, Inter draws the letter and the key, and every
+    /// character a bundled, embedded or installed face has is drawn from that face, not as a box.
+    #[test]
+    fn a_field_draws_characters_outside_the_catalogs() {
+        use craft_ui::fonts::missing_glyphs;
+        use egui_kittest::Harness;
+        use egui_kittest::kittest::Queryable;
+
+        const TYPED: &str = "龘 ẫ ⌘";
+        let stack = font_stack(None);
+        assert_covers(&stack, [Sample { language: "und", key: "typed", text: "ẫ⌘" }]);
+
+        let mut harness = Harness::builder().allow_missing_glyphs().build_ui_state(
+            |ui, (installed, text): &mut (bool, String)| {
+                if !*installed {
+                    install_fonts(ui.ctx(), None);
+                    *installed = true;
+                }
+                ui.add(egui::TextEdit::singleline(text).hint_text("Search apps"));
+            },
+            (false, String::new()),
+        );
+        harness.get_by_role(egui::accesskit::Role::TextInput).focus();
+        harness.run();
+        harness.get_by_role(egui::accesskit::Role::TextInput).type_text(TYPED);
+        harness.run();
+        assert_eq!(harness.state().1, TYPED);
+
+        let font_id = FontId::proportional(14.0);
+        for c in TYPED.chars().filter(|c| !c.is_whitespace()) {
+            let text = c.to_string();
+            let some_face_has_it =
+                missing_glyphs(&stack, &FontFamily::Proportional, [Sample { language: "und", key: "typed", text: &text }], true).is_empty();
+            if some_face_has_it {
+                assert!(harness.ctx.fonts_mut(|f| f.has_glyph(&font_id, c)), "{c:?} has a face but is drawn as a box");
+            }
+        }
+    }
+
     /// A CJK face, embedded or found on the system, sits on the Latin baseline: the patched egui
     /// puts fallback faces on the row's baseline. Without a CJK font (CI, the web) there is
     /// nothing to check.
