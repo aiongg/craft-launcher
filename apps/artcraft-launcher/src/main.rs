@@ -154,7 +154,14 @@ fn native_options(hidden: bool) -> eframe::NativeOptions {
     } else if let Some(icon) = icon {
         viewport = viewport.with_icon(icon);
     }
-    eframe::NativeOptions { viewport, persist_window: true, wgpu_options: wgpu_options(), ..Default::default() }
+    eframe::NativeOptions {
+        viewport,
+        persist_window: true,
+        wgpu_options: wgpu_options(),
+        // The font stack brings its own system font provider (`theme::install_fonts`).
+        system_font_fallback: false,
+        ..Default::default()
+    }
 }
 
 /// wgpu's backend list. On Windows that is Direct3D 12 with GL as the fallback, not Vulkan:
