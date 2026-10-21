@@ -7,9 +7,9 @@ use std::path::PathBuf;
 fn main() {
     println!("cargo::rerun-if-changed=build.rs");
     println!("cargo::rerun-if-changed=src/i18n");
-    let wasm = craft_fonts_build::target_is_wasm();
-    let embedded =
-        craft_fonts_build::Embed::new().for_ui().scripts(&["Hans", "Jpan"]).subset_to(catalogs()).filter(move |_| !wasm).write("craft_fonts.rs");
+    let embed = craft_fonts_build::Embed::new().for_ui().scripts(&["Hans", "Jpan"]);
+    let embed = if craft_fonts_build::target_is_wasm() { embed.filter(|_| false) } else { embed.subset_to(catalogs()) };
+    let embedded = embed.write("craft_fonts.rs");
     if let Err(e) = embedded {
         println!("cargo::error={e}");
     }

@@ -23,6 +23,18 @@ next to them.
 | `assets/fonts/Archivo-Variable.ttf` | Archivo 2.001, variable (headings and app names) | The Archivo Project Authors (Omnibus-Type) | Google Fonts, <https://github.com/google/fonts/tree/main/ofl/archivo> (`Archivo[wdth,wght].ttf`, renamed) | SIL OFL 1.1, [`assets/fonts/OFL-Archivo.txt`](assets/fonts/OFL-Archivo.txt) |
 | `assets/fonts/GeistMono-Variable.ttf` | Geist Mono 1.701, variable (labels and buttons) | The Geist Project Authors (Vercel) | Google Fonts, <https://github.com/google/fonts/tree/main/ofl/geistmono> (`GeistMono[wght].ttf`, renamed) | SIL OFL 1.1, [`assets/fonts/OFL-GeistMono.txt`](assets/fonts/OFL-GeistMono.txt) |
 
+### Fonts embedded from craft-fonts
+
+A build with `CRAFT_FONTS_DIR` set to a [craft-fonts](https://github.com/storytold/craft-fonts)
+checkout embeds these faces in the desktop app, cut to the characters of the translation catalogs
+(`crates/ui-egui/build.rs`). They are not stored in this repository; craft-fonts keeps each face's
+source and license file. The web build embeds none.
+
+| Face | Title | Author | Source | License |
+|---|---|---|---|---|
+| Noto Sans SC UI Regular (craft-fonts `fonts/ui/NotoSansSCUI-Regular.ttf`) | Simplified Chinese interface text | Google and Adobe (Noto CJK) | <https://github.com/notofonts/noto-cjk/tree/f8d157532fbfaeda587e826d4cd5b21a49186f7c/Sans/SubsetOTF/SC>, by way of craft-fonts | SIL OFL 1.1, craft-fonts `fonts/ui/OFL.txt` |
+| BIZ UDPGothic Regular (craft-fonts `fonts/biz-ud-pgothic/BIZUDPGothic-Regular.ttf`) | Japanese interface text | The BIZ UDGothic Project Authors (Morisawa Inc.) | <https://github.com/googlefonts/morisawa-biz-ud-gothic/tree/18934af56b9c003ca58c54bffbf226848cb11032>, by way of craft-fonts | SIL OFL 1.1, craft-fonts `fonts/biz-ud-pgothic/OFL.txt` |
+
 ### Craft App Suite icons
 
 The launcher shows each Craft app with that app's own icon. They are copied unmodified from each
