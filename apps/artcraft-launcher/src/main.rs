@@ -507,7 +507,7 @@ impl Launcher {
     fn start(&mut self, settings: Option<Settings>, waker: &Arc<Waker>) {
         self.started = true;
         if let Some(settings) = settings {
-            self.ui.settings = settings;
+            self.restore_saved_settings(settings);
         }
         self.waker = Some(waker.clone());
         let (wake, on_quit) = (waker.clone(), waker.clone());
@@ -516,6 +516,13 @@ impl Launcher {
             Err(e) => log::warn!("no tray icon: {e}"),
         }
         self.host.tray = self.tray.is_some();
+    }
+
+    fn restore_saved_settings(&mut self, mut settings: Settings) {
+        // `LauncherUi::new` sees defaults before the shell loads persisted settings. Filters
+        // removed from the 0.6 toolbar must be cleared at this later load boundary too.
+        settings.migrate();
+        self.ui.settings = settings;
     }
 
     /// Readies the launcher for a new window. Unless the launcher started in the tray, the first
@@ -812,6 +819,21 @@ mod tests {
         let seen = Arc::new(Seen { clock: AtomicI64::new(NOW), ..Seen::default() });
         let (show, show_requests) = channel();
         (Launcher::new(Box::new(Quiet(seen.clone())), show_requests, None), show, seen)
+    }
+
+    #[test]
+    fn saved_filters_are_migrated_when_desktop_settings_load() {
+        use artcraft_launcher_ui_egui::settings::Filter;
+
+        let (mut launcher, _show, _) = launcher();
+        // `start` also creates a native tray, which macOS requires on the main thread.
+        for (filter, expected) in
+            [(Filter::Installed, Filter::All), (Filter::Updates, Filter::All), (Filter::NotInstalled, Filter::All), (Filter::Hidden, Filter::Hidden)]
+        {
+            launcher.restore_saved_settings(Settings { filter, last_check: Some(NOW), ..Settings::default() });
+            assert_eq!(launcher.ui.settings.filter, expected, "{filter:?}");
+            assert_eq!(launcher.ui.settings.last_check, Some(NOW));
+        }
     }
 
     #[test]

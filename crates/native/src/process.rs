@@ -630,8 +630,10 @@ mod inherited_pipe_tests {
             std::io::stderr().write_all(&buffer).unwrap();
         }
         std::fs::write(dir.join("ready"), []).unwrap();
+        // Hold the pipes far longer than any deadline the test tries, so a capture that waited
+        // for them would show; the test's guard stops this early.
         let start = Instant::now();
-        while !dir.join("stop").exists() && start.elapsed() < Duration::from_secs(3) {
+        while !dir.join("stop").exists() && start.elapsed() < HOLD {
             std::thread::sleep(Duration::from_millis(10));
         }
         std::fs::write(dir.join("done"), []).unwrap();
@@ -642,8 +644,10 @@ mod inherited_pipe_tests {
     fn pipe_parent() {
         let dir = fixture_dir();
         let descendant = command(std::env::current_exe().unwrap()).args(fixture_args("pipe_holder", dir.to_str().unwrap())).spawn().unwrap();
+        std::fs::write(dir.join("spawned"), []).unwrap();
+        // No deadline of its own: run() kills this process at its deadline if it is too slow.
         let start = Instant::now();
-        while !dir.join("ready").exists() && start.elapsed() < Duration::from_secs(3) {
+        while !dir.join("ready").exists() && start.elapsed() < HOLD {
             std::thread::sleep(Duration::from_millis(10));
         }
         assert!(dir.join("ready").exists(), "descendant did not fill both captured pipes");
@@ -652,13 +656,19 @@ mod inherited_pipe_tests {
         drop(descendant);
     }
 
+    /// How long the descendant holds the pipes when nothing stops it.
+    const HOLD: Duration = Duration::from_secs(120);
+
     struct StopHolder(tempfile::TempDir);
 
     impl Drop for StopHolder {
         fn drop(&mut self) {
             let _ = std::fs::write(self.0.path().join("stop"), []);
+            if !self.0.path().join("spawned").exists() {
+                return;
+            }
             let start = Instant::now();
-            while !self.0.path().join("done").exists() && start.elapsed() < Duration::from_secs(5) {
+            while !self.0.path().join("done").exists() && start.elapsed() < Duration::from_secs(30) {
                 std::thread::sleep(Duration::from_millis(10));
             }
         }
@@ -666,20 +676,33 @@ mod inherited_pipe_tests {
 
     #[test]
     fn exited_helper_does_not_wait_past_deadline_for_inherited_pipes() {
-        let holder = StopHolder(tempfile::tempdir().unwrap());
         let exe = std::env::current_exe().unwrap();
-        let args = fixture_args("pipe_parent", holder.0.path().to_str().unwrap());
-        let args: Vec<&str> = args.iter().map(String::as_str).collect();
-        let start = Instant::now();
-        let result = run(exe.to_str().unwrap(), &args, Duration::from_secs(1));
-        let elapsed = start.elapsed();
-        assert!(holder.0.path().join("parent-returning").exists(), "direct child did not exit its fixture");
-        assert!(
-            matches!(&result, Err(error) if error.contains("didn't finish within")),
-            "expected a pipe deadline error; helper returned success: {}, elapsed: {elapsed:?}",
-            result.is_ok()
-        );
-        assert!(elapsed < Duration::from_secs(2), "capture exceeded its caller deadline: {elapsed:?}");
-        // The guard stops the finite descendant and waits for its completion marker on failures too.
+        // The direct child has to start a second test process and fill both pipes before the
+        // deadline, which can take seconds on a slow or emulated machine. An attempt where it
+        // didn't get that far says nothing about inherited pipes: retry with a longer deadline.
+        let mut deadline = Duration::from_secs(1);
+        loop {
+            let holder = StopHolder(tempfile::tempdir().unwrap());
+            let args = fixture_args("pipe_parent", holder.0.path().to_str().unwrap());
+            let args: Vec<&str> = args.iter().map(String::as_str).collect();
+            let start = Instant::now();
+            let result = run(exe.to_str().unwrap(), &args, deadline);
+            let elapsed = start.elapsed();
+            if !holder.0.path().join("parent-returning").exists() && deadline < Duration::from_secs(16) {
+                deadline *= 4;
+                continue;
+            }
+            assert!(holder.0.path().join("parent-returning").exists(), "direct child did not exit its fixture within {deadline:?}");
+            assert!(
+                matches!(&result, Err(error) if error.contains("didn't finish within")),
+                "expected a pipe deadline error; helper returned success: {}, elapsed: {elapsed:?}",
+                result.is_ok()
+            );
+            // The descendant would hold the pipes for HOLD, far past this bound.
+            assert!(deadline * 2 < HOLD);
+            assert!(elapsed < deadline * 2, "capture exceeded its caller deadline {deadline:?}: {elapsed:?}");
+            // The guard stops the finite descendant and waits for its completion marker on failures too.
+            break;
+        }
     }
 }
