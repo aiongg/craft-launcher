@@ -500,8 +500,9 @@ mod tests {
         }
     }
 
-    /// A CJK face, embedded or found on the system, sits on the Latin baseline: the patched egui
-    /// puts fallback faces on the row's baseline. Without a CJK font (CI, the web) there is
+    /// A CJK face, embedded or found on the system, sits on the Latin baseline. craft-ui fits the
+    /// face into the Latin row with a vertical offset, so the glyph's position says nothing about
+    /// where it is drawn: the check is on the ink. Without a CJK font (CI, the web) there is
     /// nothing to check.
     #[test]
     fn cjk_sits_on_the_latin_baseline() {
@@ -523,13 +524,15 @@ mod tests {
             output.textures_delta.clear();
             let size = 20.0;
             let font_id = FontId::new(size, FontFamily::Proportional);
-            let galley = ctx.fonts_mut(|f| f.layout_no_wrap(format!("A{sample}"), font_id.clone(), Color32::WHITE));
             assert!(ctx.fonts_mut(|f| f.has_glyphs(&font_id, &sample.to_string())), "{}: no glyph for {sample:?}", lang.code());
-            let glyphs = &galley.rows[0].row.glyphs;
-            let pos = |c: char| glyphs.iter().find(|g| g.chr == c).map(|g| g.pos.y);
-            if let (Some(latin), Some(cjk)) = (pos('A'), pos(sample)) {
-                assert!((cjk - latin).abs() < 1.0, "{}: latin {latin}, cjk {cjk}", lang.code());
-            }
+            let layout = |text: String| ctx.fonts_mut(|f| f.layout_no_wrap(text, font_id.clone(), Color32::WHITE));
+            let latin = layout("A".to_owned());
+            let baseline = latin.rows[0].row.glyphs[0].pos.y;
+            let (latin, cjk) = (latin.mesh_bounds, layout(sample.to_string()).mesh_bounds);
+            // CJK ink reaches a little below the baseline and about as high as a capital.
+            let below = cjk.max.y - baseline;
+            assert!((0.0..=0.2 * size).contains(&below), "{}: {sample:?} ends {below} below the baseline", lang.code());
+            assert!((cjk.min.y - latin.min.y).abs() <= 0.1 * size, "{}: {sample:?} top {}, capital top {}", lang.code(), cjk.min.y, latin.min.y);
         }
     }
 }

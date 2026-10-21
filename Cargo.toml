@@ -51,15 +51,15 @@ strip = "debuginfo"
 
 # The suite's patched toolkit: bidi text, IME and font fixes on egui 0.37 and winit 0.30.
 [patch.crates-io]
-ecolor = { git = "https://github.com/aiongg/egui", rev = "a7bc087cf46779732dd59f4c0c3391e7bc34593c" }
-eframe = { git = "https://github.com/aiongg/egui", rev = "a7bc087cf46779732dd59f4c0c3391e7bc34593c" }
-egui = { git = "https://github.com/aiongg/egui", rev = "a7bc087cf46779732dd59f4c0c3391e7bc34593c" }
-egui-wgpu = { git = "https://github.com/aiongg/egui", rev = "a7bc087cf46779732dd59f4c0c3391e7bc34593c" }
-egui-winit = { git = "https://github.com/aiongg/egui", rev = "a7bc087cf46779732dd59f4c0c3391e7bc34593c" }
-egui_extras = { git = "https://github.com/aiongg/egui", rev = "a7bc087cf46779732dd59f4c0c3391e7bc34593c" }
-egui_kittest = { git = "https://github.com/aiongg/egui", rev = "a7bc087cf46779732dd59f4c0c3391e7bc34593c" }
-egui_system_font_provider = { git = "https://github.com/aiongg/egui", rev = "a7bc087cf46779732dd59f4c0c3391e7bc34593c" }
-emath = { git = "https://github.com/aiongg/egui", rev = "a7bc087cf46779732dd59f4c0c3391e7bc34593c" }
-epaint = { git = "https://github.com/aiongg/egui", rev = "a7bc087cf46779732dd59f4c0c3391e7bc34593c" }
-epaint_default_fonts = { git = "https://github.com/aiongg/egui", rev = "a7bc087cf46779732dd59f4c0c3391e7bc34593c" }
+ecolor = { git = "https://github.com/aiongg/egui", rev = "a4f9a17f64a6bae61350fb85804c9df0d9865916" }
+eframe = { git = "https://github.com/aiongg/egui", rev = "a4f9a17f64a6bae61350fb85804c9df0d9865916" }
+egui = { git = "https://github.com/aiongg/egui", rev = "a4f9a17f64a6bae61350fb85804c9df0d9865916" }
+egui-wgpu = { git = "https://github.com/aiongg/egui", rev = "a4f9a17f64a6bae61350fb85804c9df0d9865916" }
+egui-winit = { git = "https://github.com/aiongg/egui", rev = "a4f9a17f64a6bae61350fb85804c9df0d9865916" }
+egui_extras = { git = "https://github.com/aiongg/egui", rev = "a4f9a17f64a6bae61350fb85804c9df0d9865916" }
+egui_kittest = { git = "https://github.com/aiongg/egui", rev = "a4f9a17f64a6bae61350fb85804c9df0d9865916" }
+egui_system_font_provider = { git = "https://github.com/aiongg/egui", rev = "a4f9a17f64a6bae61350fb85804c9df0d9865916" }
+emath = { git = "https://github.com/aiongg/egui", rev = "a4f9a17f64a6bae61350fb85804c9df0d9865916" }
+epaint = { git = "https://github.com/aiongg/egui", rev = "a4f9a17f64a6bae61350fb85804c9df0d9865916" }
+epaint_default_fonts = { git = "https://github.com/aiongg/egui", rev = "a4f9a17f64a6bae61350fb85804c9df0d9865916" }
 winit = { git = "https://github.com/aiongg/winit", rev = "8b35388bd719e8cc86a95971ba0bc026c9a8f058" }
