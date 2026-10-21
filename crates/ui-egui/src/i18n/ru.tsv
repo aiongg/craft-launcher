@@ -374,3 +374,11 @@ filter	Installed	Установлены
 	Show {n} more changes	Показать ещё изменений: {n}
 	Last updated: {date}	Последнее обновление: {date}
 column	Version	Версия
+# The page toggle (Apps, Fonts), the Fonts page and its download switch in Settings.
+	Fonts	Шрифты
+	Allow font downloads	Разрешить загрузку шрифтов
+	Couldn't change the font download setting: {e}	Не удалось изменить параметр загрузки шрифтов: {e}
+	Fonts download from their sources only when you install or preview one. Every Craft app shares this setting.	Шрифты загружаются из их источников, только когда вы устанавливаете шрифт или открываете его предпросмотр. Этот параметр общий для всех приложений Craft.
+	Sources	Источники
+	Apps	Приложения
+	Fonts for every Craft app	Шрифты для всех приложений Craft

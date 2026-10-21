@@ -366,3 +366,11 @@ filter	Installed	Instalados
 	Show {n} more changes	Mostrar mais {n} alterações
 	Last updated: {date}	Última atualização: {date}
 column	Version	Versão
+# The page toggle (Apps, Fonts), the Fonts page and its download switch in Settings.
+	Fonts	Fontes
+	Allow font downloads	Permitir download de fontes
+	Couldn't change the font download setting: {e}	Não foi possível alterar a configuração de download de fontes: {e}
+	Fonts download from their sources only when you install or preview one. Every Craft app shares this setting.	As fontes são baixadas das suas origens somente quando você instala ou visualiza uma. Todos os apps Craft compartilham esta configuração.
+	Sources	Origens
+	Apps	Aplicativos
+	Fonts for every Craft app	Fontes para todos os aplicativos Craft

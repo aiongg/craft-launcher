@@ -329,12 +329,14 @@ name = "artcraft-launcher-ui-egui"
 version = "0.6.1"
 dependencies = [
  "artcraft-launcher-core",
+ "craft-font-manager",
  "craft-fonts-build",
  "craft-ui",
  "egui",
  "egui_extras",
  "egui_kittest",
  "egui_system_font_provider",
+ "epaint_default_fonts",
  "image",
  "jiff",
  "js-sys",
@@ -925,9 +927,58 @@ dependencies = [
 ]
 
 [[package]]
+name = "craft-atomic"
+version = "0.1.0"
+source = "git+https://github.com/aiongg/craft-libs?rev=7fc94afd0a925e57b84dc7650a1ef6e7ab68294c#7fc94afd0a925e57b84dc7650a1ef6e7ab68294c"
+dependencies = [
+ "rustix 1.1.5",
+]
+
+[[package]]
+name = "craft-font-catalog"
+version = "0.1.0"
+source = "git+https://github.com/aiongg/craft-libs?rev=7fc94afd0a925e57b84dc7650a1ef6e7ab68294c#7fc94afd0a925e57b84dc7650a1ef6e7ab68294c"
+dependencies = [
+ "fontique",
+ "skrifa 0.47.0",
+ "thiserror 2.0.21",
+ "windows-registry",
+]
+
+[[package]]
+name = "craft-font-manager"
+version = "0.1.0"
+source = "git+https://github.com/aiongg/craft-libs?rev=7fc94afd0a925e57b84dc7650a1ef6e7ab68294c#7fc94afd0a925e57b84dc7650a1ef6e7ab68294c"
+dependencies = [
+ "craft-font-catalog",
+ "craft-font-store",
+ "craft-i18n",
+ "craft-ui",
+ "egui",
+ "log",
+ "serde",
+]
+
+[[package]]
+name = "craft-font-store"
+version = "0.1.0"
+source = "git+https://github.com/aiongg/craft-libs?rev=7fc94afd0a925e57b84dc7650a1ef6e7ab68294c#7fc94afd0a925e57b84dc7650a1ef6e7ab68294c"
+dependencies = [
+ "craft-atomic",
+ "craft-font-catalog",
+ "flate2",
+ "serde",
+ "serde_json",
+ "sha2",
+ "skrifa 0.47.0",
+ "thiserror 2.0.21",
+ "ureq",
+]
+
+[[package]]
 name = "craft-fonts-build"
 version = "0.1.0"
-source = "git+https://github.com/aiongg/craft-libs?rev=607d38a0ddffe195467c4117937915c5ab9095af#607d38a0ddffe195467c4117937915c5ab9095af"
+source = "git+https://github.com/aiongg/craft-libs?rev=7fc94afd0a925e57b84dc7650a1ef6e7ab68294c#7fc94afd0a925e57b84dc7650a1ef6e7ab68294c"
 dependencies = [
  "skera",
  "skrifa 0.48.0",
@@ -936,7 +987,7 @@ dependencies = [
 [[package]]
 name = "craft-i18n"
 version = "0.1.0"
-source = "git+https://github.com/aiongg/craft-libs?rev=607d38a0ddffe195467c4117937915c5ab9095af#607d38a0ddffe195467c4117937915c5ab9095af"
+source = "git+https://github.com/aiongg/craft-libs?rev=7fc94afd0a925e57b84dc7650a1ef6e7ab68294c#7fc94afd0a925e57b84dc7650a1ef6e7ab68294c"
 dependencies = [
  "fixed_decimal",
  "icu_decimal",
@@ -958,7 +1009,7 @@ dependencies = [
 [[package]]
 name = "craft-ui"
 version = "0.1.0"
-source = "git+https://github.com/aiongg/craft-libs?rev=607d38a0ddffe195467c4117937915c5ab9095af#607d38a0ddffe195467c4117937915c5ab9095af"
+source = "git+https://github.com/aiongg/craft-libs?rev=7fc94afd0a925e57b84dc7650a1ef6e7ab68294c#7fc94afd0a925e57b84dc7650a1ef6e7ab68294c"
 dependencies = [
  "craft-fonts-build",
  "craft-i18n",
@@ -4019,6 +4070,17 @@ dependencies = [
 
 [[package]]
 name = "read-fonts"
+version = "0.44.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d5a0cf4bb6cbce4c29756270d189a5e400ac05e91192161d83a0bcb6e68492e8"
+dependencies = [
+ "bytemuck",
+ "font-types",
+ "once_cell",
+]
+
+[[package]]
+name = "read-fonts"
 version = "0.45.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8a5b7bed3d16ab428d8fa533640ab805ff50e7ad8a4d00649de1259e70023282"
@@ -4552,6 +4614,16 @@ checksum = "819ab7d62b1d3e72d9d9dea5650bac30424f9111364bb94928dbf5ecad1baa68"
 dependencies = [
  "bytemuck",
  "read-fonts 0.41.0",
+]
+
+[[package]]
+name = "skrifa"
+version = "0.47.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "526e654b303ff4ad73a5a40b25de2b3ce3d039c5e3b6da5f89ae6e57004cb40f"
+dependencies = [
+ "bytemuck",
+ "read-fonts 0.44.0",
 ]
 
 [[package]]
@@ -5185,6 +5257,7 @@ dependencies = [
  "rustls-platform-verifier",
  "ureq-proto",
  "utf8-zero",
+ "webpki-roots",
 ]
 
 [[package]]
@@ -5541,6 +5614,15 @@ name = "webpki-root-certs"
 version = "1.0.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b96554aa2acc8ccdb7e1c9a58a7a68dd5d13bccc69cd124cb09406db612a1c9b"
+dependencies = [
+ "rustls-pki-types",
+]
+
+[[package]]
+name = "webpki-roots"
+version = "1.0.10"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1c1c8e20c8a38fc7d65abfe74eb7280e4aa667e8eec8bc84996d2874810748d9"
 dependencies = [
  "rustls-pki-types",
 ]

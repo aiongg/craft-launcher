@@ -8,7 +8,7 @@ use artcraft_launcher_core::status::AppStatus;
 use artcraft_launcher_core::time;
 use egui::{Color32, CornerRadius, FontId, Rect, RichText, Sense, Stroke, Ui, vec2};
 
-use crate::app::{Dialog, LauncherUi, TitleBar};
+use crate::app::{Dialog, LauncherUi, Page, TitleBar};
 use crate::i18n::{current, fmt, t, tn, tr_ctx};
 use crate::model::{self, AppEntry};
 use crate::settings::{Filter, SortKey, ViewMode};
@@ -172,6 +172,11 @@ impl LauncherUi {
         let updates = self.count(Filter::Updates);
         let mut compact = false;
         ui.horizontal(|ui| {
+            self.page_toggle(ui);
+            // The rest of the row works on the apps; the Fonts page has its own search.
+            if self.page != Page::Apps {
+                return;
+            }
             self.refresh_button(ui);
             // Hiding an app is only undone from here, so the way back to the hidden ones stays
             // while there are any: a toggle, lit while the hidden apps are what the page shows.
@@ -225,6 +230,17 @@ impl LauncherUi {
                     }
                 });
             });
+        }
+    }
+
+    /// The toggle between the launcher's pages, left out where there is only one (the web build).
+    fn page_toggle(&mut self, ui: &mut Ui) {
+        let pages = pages();
+        if pages.len() > 1 {
+            let mut page = self.page;
+            if widgets::cells(ui, &mut page, &pages) {
+                self.set_page(page);
+            }
         }
     }
 
@@ -941,6 +957,15 @@ impl LauncherUi {
             }
         });
     }
+}
+
+/// The pages the toolbar's toggle offers, in order: the Craft App Suite, then Fonts (desktop only).
+fn pages() -> Vec<(Page, widgets::Cell<'static>)> {
+    let mut pages = vec![(Page::Apps, widgets::Cell { label: tl!("Apps"), tip: tl!("Craft App Suite"), count: None })];
+    if cfg!(not(target_arch = "wasm32")) {
+        pages.push((Page::Fonts, widgets::Cell { label: tl!("Fonts"), tip: tl!("Fonts for every Craft app"), count: None }));
+    }
+    pages
 }
 
 /// What the grid's sort dropdown offers: the order and, for names, which way. The installed apps

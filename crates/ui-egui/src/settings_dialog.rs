@@ -109,6 +109,8 @@ impl LauncherUi {
                 let Ok(mut state) = state.try_borrow_mut() else { return };
                 let (this, host) = &mut *state;
                 this.settings_install(ui, &mut **host);
+                #[cfg(not(target_arch = "wasm32"))]
+                this.settings_fonts(ui);
                 this.settings_background(ui, &mut **host);
                 this.settings_community(ui);
             },
@@ -241,6 +243,27 @@ impl LauncherUi {
                 note(ui, tl!("Updates always use the format an app was installed with."));
             });
         }
+    }
+
+    /// The font store's download consent, which every Craft app shares.
+    #[cfg(not(target_arch = "wasm32"))]
+    fn settings_fonts(&mut self, ui: &mut Ui) {
+        sheet::panel(ui, tl!("Fonts"), |ui| {
+            let now = ui.input(|i| i.time);
+            let mut allowed = self.fonts.downloads_allowed(now);
+            if ui.checkbox(&mut allowed, tl!("Allow font downloads")).changed()
+                && let Err(e) = self.fonts.set_downloads_allowed(allowed)
+            {
+                let ctx = ui.ctx().clone();
+                self.toast(&ctx, fmt(tl!("Couldn't change the font download setting: {e}"), &[("e", &e)]), true);
+            }
+            note(ui, tl!("Fonts download from their sources only when you install or preview one. Every Craft app shares this setting."));
+            ui.add_space(10.0);
+            widgets::hud(ui, tl!("Sources"), Tokens::get(ui.ctx()).faint);
+            ui.add_space(2.0);
+            let lang = crate::app::effective_lang(&self.settings.language);
+            self.fonts.sources_ui(ui, &self.settings.fonts, lang.code());
+        });
     }
 
     fn settings_background(&mut self, ui: &mut Ui, host: &mut dyn Host) {
