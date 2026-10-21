@@ -61,7 +61,12 @@
           pname = "artcraft-launcher";
           version = version;
           src = ./.;
-          cargoLock.lockFile = ./Cargo.lock;
+          cargoLock = {
+            lockFile = ./Cargo.lock;
+            # Git dependencies (craft-libs, the suite's egui and winit) are fetched at the revision
+            # Cargo.lock pins, so a new pin needs no hash here.
+            allowBuiltinFetchGit = true;
+          };
 
           nativeBuildInputs = with pkgs; [
             pkg-config
