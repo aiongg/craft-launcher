@@ -160,7 +160,9 @@ fn japanese_switches_persists_and_keeps_install_actions() {
     // The list is long enough to scroll, so the last option may be out of view: click it through
     // accesskit, which reaches widgets that aren't visible.
     h.get_by_label("Japanese").click_accesskit();
-    h.run_steps(3);
+    // A pass installs the language's fonts and the next draws nothing; with a CJK face's taller
+    // rows the dialog then settles one pass later.
+    h.run_steps(5);
     if !artcraft_launcher_ui_egui::theme::cjk_font_available(Lang::JA) {
         // No font for Japanese: choosing it keeps the UI in English, and Settings says why.
         assert_eq!(h.state().as_ref().unwrap().settings.language, "ja");
