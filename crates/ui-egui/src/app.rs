@@ -8,6 +8,7 @@ use artcraft_launcher_core::protocol::{
 use artcraft_launcher_core::release::Release;
 use artcraft_launcher_core::status::AppStatus;
 use artcraft_launcher_core::{Platform, SUITE};
+use craft_ui::direction::{self, HasDirection};
 
 use crate::i18n::set_current;
 use crate::model::AppEntry;
@@ -584,6 +585,10 @@ impl LauncherUi {
         if self.applied_theme != Some(self.settings.theme) {
             theme::apply(&ctx, self.settings.theme);
             self.applied_theme = Some(self.settings.theme);
+        }
+        let dir = direction::resolve(lang.code(), direction::Setting::Language);
+        if ctx.direction() != dir {
+            direction::apply(&ctx, dir);
         }
         let now = ctx.input(|i| i.time);
         if now >= self.motion_recheck {
