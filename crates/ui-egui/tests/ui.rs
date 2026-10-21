@@ -1707,6 +1707,7 @@ fn turn_wheel(h: &mut Harness<'_, Option<LauncherUi>>, lines: f32) {
         unit: egui::MouseWheelUnit::Line,
         delta: egui::vec2(0.0, -lines),
         phase: egui::TouchPhase::Move,
+        source: egui::MouseWheelSource::Wheel,
         modifiers: egui::Modifiers::NONE,
     };
     let mut raw = egui::RawInput { events: vec![wheel], ..Default::default() };
@@ -1797,6 +1798,7 @@ fn control_wheel_zooms_the_main_ui() {
         unit: egui::MouseWheelUnit::Point,
         phase: egui::TouchPhase::Move,
         delta: egui::vec2(0.0, 100.0),
+        source: egui::MouseWheelSource::Wheel,
         modifiers: egui::Modifiers::COMMAND,
     });
     h.step();
@@ -1826,6 +1828,7 @@ fn changelog_shortcuts_zoom_only_the_notes_text() {
         unit: egui::MouseWheelUnit::Point,
         phase: egui::TouchPhase::Move,
         delta: egui::vec2(0.0, 100.0),
+        source: egui::MouseWheelSource::Wheel,
         modifiers: egui::Modifiers::COMMAND,
     });
     h.step();

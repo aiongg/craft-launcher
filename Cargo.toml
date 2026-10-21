@@ -20,10 +20,12 @@ todo = "warn"
 artcraft-launcher-core = { path = "crates/core" }
 artcraft-launcher-ui-egui = { path = "crates/ui-egui" }
 artcraft-launcher-native = { path = "crates/native" }
-egui = "0.36"
-eframe = { version = "0.36", default-features = false }
-egui_extras = { version = "0.36", default-features = false }
-egui_kittest = "0.36"
+egui = "0.37"
+eframe = { version = "0.37", default-features = false }
+egui_extras = { version = "0.37", default-features = false }
+egui_kittest = "0.37"
+# Only its `fonts` and `ime` modules; the defaults add colour glyphs and installed system fonts.
+craft-ui = { git = "https://github.com/aiongg/craft-libs", branch = "lang-integration" }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 semver = { version = "1", features = ["serde"] }
@@ -44,3 +46,18 @@ inherits = "release"
 opt-level = "s"
 lto = "fat"
 strip = "debuginfo"
+
+# The suite's patched toolkit: bidi text, IME and font fixes on egui 0.37 and winit 0.30.
+[patch.crates-io]
+ecolor = { git = "https://github.com/aiongg/egui", branch = "craft/0.37" }
+eframe = { git = "https://github.com/aiongg/egui", branch = "craft/0.37" }
+egui = { git = "https://github.com/aiongg/egui", branch = "craft/0.37" }
+egui-wgpu = { git = "https://github.com/aiongg/egui", branch = "craft/0.37" }
+egui-winit = { git = "https://github.com/aiongg/egui", branch = "craft/0.37" }
+egui_extras = { git = "https://github.com/aiongg/egui", branch = "craft/0.37" }
+egui_kittest = { git = "https://github.com/aiongg/egui", branch = "craft/0.37" }
+egui_system_font_provider = { git = "https://github.com/aiongg/egui", branch = "craft/0.37" }
+emath = { git = "https://github.com/aiongg/egui", branch = "craft/0.37" }
+epaint = { git = "https://github.com/aiongg/egui", branch = "craft/0.37" }
+epaint_default_fonts = { git = "https://github.com/aiongg/egui", branch = "craft/0.37" }
+winit = { git = "https://github.com/aiongg/winit", branch = "craft/suite" }

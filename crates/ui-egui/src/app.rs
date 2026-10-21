@@ -144,7 +144,7 @@ pub struct LauncherUi {
     /// Fonts registered with `set_fonts` only exist from the next frame on; drawing with the named
     /// weights before then would abort.
     fonts_ready: bool,
-    /// The CJK language whose system font is installed, if any.
+    /// The CJK language the font stack was built for, if any.
     /// Set when such a language comes into use, then kept for the session.
     pub(crate) cjk_font: Option<crate::i18n::Lang>,
     sent_options: Option<BackendOptions>,
@@ -161,7 +161,7 @@ pub struct LauncherUi {
 
 /// The language to draw in: the preference, or English where it needs a CJK font the system
 /// doesn't have (Settings says so), rather than boxes for every character. The only place the
-/// CJK font gets loaded: when such a language is selected, or Auto resolves to it.
+/// system's fonts are searched for one: when such a language is selected, or Auto resolves to it.
 pub(crate) fn effective_lang(pref: &str) -> crate::i18n::Lang {
     let lang = crate::i18n::Lang::from_pref(pref);
     if lang.needs_cjk_font() && !theme::cjk_font_available(lang) { crate::i18n::Lang::EN } else { lang }
@@ -769,7 +769,7 @@ impl LauncherUi {
         ctx.request_repaint_after(Duration::from_millis(250));
         let t = Tokens::get(ctx);
         let anchor = egui::vec2(-20.0, -(crate::views::FOOTER_H + 12.0));
-        egui::Area::new(egui::Id::new("toasts")).anchor(egui::Align2::RIGHT_BOTTOM, anchor).order(egui::Order::Foreground).show(ctx, |ui| {
+        egui::Area::new(egui::Id::unique("toasts")).anchor(egui::Align2::RIGHT_BOTTOM, anchor).order(egui::Order::Foreground).show(ctx, |ui| {
             ui.set_max_width(380.0);
             let mut dismiss = None;
             for (i, toast) in self.toasts.iter().enumerate() {

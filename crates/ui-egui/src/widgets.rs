@@ -47,7 +47,7 @@ pub fn hud(ui: &mut Ui, text: &str, color: Color32) -> Response {
     let galley = hud_galley(ui, text, color);
     let (rect, resp) = ui.allocate_exact_size(galley.size(), Sense::hover());
     paint_left(ui, rect, galley, color);
-    resp.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Label, true, text));
+    resp.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Label, true, text));
     resp
 }
 
@@ -66,7 +66,7 @@ pub fn hud_elided(ui: &mut Ui, text: &str, color: Color32, max_width: f32) -> Re
     let elided = galley.elided;
     let (rect, resp) = ui.allocate_exact_size(galley.size(), Sense::hover());
     paint_left(ui, rect, galley, color);
-    resp.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Label, true, text));
+    resp.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Label, true, text));
     if elided { resp.on_hover_text(text) } else { resp }
 }
 
@@ -87,7 +87,7 @@ pub fn tag(ui: &mut Ui, text: &str, fill: Color32, ink: Color32) -> Response {
     let (rect, resp) = ui.allocate_exact_size(galley.size() + vec2(16.0, 8.0), Sense::hover());
     ui.painter().rect_filled(rect, CornerRadius::ZERO, fill);
     paint_centred(ui, rect, galley, ink);
-    resp.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Label, true, text));
+    resp.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Label, true, text));
     resp
 }
 
@@ -114,7 +114,7 @@ pub fn nav_icon(ui: &mut Ui, symbol: &str, tip: &str, height: f32, busy: bool) -
     } else {
         p.text(rect.center(), egui::Align2::CENTER_CENTER, symbol, egui::FontId::proportional(17.0), if hovered { t.invert_fg } else { t.muted });
     }
-    resp.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Button, !busy, tip));
+    resp.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Button, !busy, tip));
     let resp = resp.on_hover_text(tip);
     if busy { resp } else { resp.on_hover_cursor(egui::CursorIcon::PointingHand) }
 }
@@ -128,7 +128,7 @@ const RESIZE_EDGE: f32 = 5.0;
 pub fn title_bar_drag(ui: &mut Ui) {
     let r = ui.max_rect();
     let rect = Rect::from_min_max(r.min + vec2(RESIZE_EDGE, RESIZE_EDGE), r.max - vec2(RESIZE_EDGE, 0.0));
-    let resp = ui.interact(rect, ui.id().with("title-bar"), Sense::click_and_drag());
+    let resp = ui.interact(rect, ui.scope_id().with("title-bar"), Sense::click_and_drag());
     if resp.drag_started_by(egui::PointerButton::Primary) {
         ui.ctx().send_viewport_cmd(egui::ViewportCommand::StartDrag);
     }
@@ -171,7 +171,7 @@ fn window_button(ui: &mut Ui, button: WindowButton, height: f32) -> Response {
     // Clickable below the resize band along the top (and, for close, the right edge).
     let right = if button == WindowButton::Close { RESIZE_EDGE } else { 0.0 };
     let hit = Rect::from_min_max(rect.min + vec2(0.0, RESIZE_EDGE), rect.max - vec2(right, 0.0));
-    let resp = ui.interact(hit, ui.id().with(("window-button", button as u8)), Sense::click());
+    let resp = ui.interact(hit, ui.scope_id().with(("window-button", button as u8)), Sense::click());
     let (fill, ink) = match (button, resp.hovered()) {
         (WindowButton::Close, true) => (Color32::from_rgb(0xc4, 0x2b, 0x1c), Color32::WHITE),
         (_, true) => (t.line, t.ink_strong),
@@ -208,7 +208,7 @@ fn window_button(ui: &mut Ui, button: WindowButton, height: f32) -> Response {
             p.line_segment([c + vec2(-s, s), c + vec2(s, -s)], stroke);
         }
     }
-    resp.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Button, true, label));
+    resp.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Button, true, label));
     resp.on_hover_text(label)
 }
 
@@ -222,7 +222,7 @@ pub fn window_edges(ctx: &egui::Context) {
     }
     let t = Tokens::get(ctx);
     let r = ctx.content_rect();
-    ctx.layer_painter(egui::LayerId::new(egui::Order::Foreground, egui::Id::new("window-border"))).rect_stroke(
+    ctx.layer_painter(egui::LayerId::new(egui::Order::Foreground, egui::Id::unique("window-border"))).rect_stroke(
         r,
         CornerRadius::ZERO,
         t.hairline(),
@@ -266,7 +266,7 @@ pub fn hud_link(ui: &mut Ui, text: &str, url: &str) -> Response {
     let galley = hud_galley(ui, &format!("{text} ↗"), t.muted);
     let (rect, resp) = ui.allocate_exact_size(galley.size(), Sense::click());
     paint_left(ui, rect, galley, if resp.hovered() { t.ink_strong } else { t.muted });
-    resp.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Link, true, text));
+    resp.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Link, true, text));
     let resp = resp.on_hover_text(url).on_hover_cursor(egui::CursorIcon::PointingHand);
     if resp.clicked() {
         ui.ctx().open_url(egui::OpenUrl::new_tab(url));
@@ -281,7 +281,7 @@ pub fn badge(ui: &mut Ui, text: &str, color: Color32) -> Response {
     let (rect, resp) = ui.allocate_exact_size(vec2(galley.size().x + 12.0, 20.0), Sense::hover());
     ui.painter().rect(rect, CornerRadius::ZERO, t.sunken, t.hairline(), egui::StrokeKind::Inside);
     paint_centred(ui, rect, galley, color);
-    resp.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Label, true, text));
+    resp.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Label, true, text));
     resp
 }
 
@@ -320,7 +320,7 @@ pub fn button(ui: &mut Ui, text: &str, kind: Kind, width: f32) -> Response {
     let fade = |c: Color32| if enabled { c } else { c.gamma_multiply(0.5) };
     ui.painter().rect(rect, CornerRadius::ZERO, fade(fill), Stroke::new(stroke.width, fade(stroke.color)), egui::StrokeKind::Inside);
     paint_centred(ui, rect, galley, fade(color));
-    resp.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Button, enabled, text));
+    resp.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Button, enabled, text));
     if enabled { resp.on_hover_cursor(egui::CursorIcon::PointingHand) } else { resp }
 }
 
@@ -375,7 +375,7 @@ pub fn cells_apart<T: PartialEq + Copy>(ui: &mut Ui, value: &mut T, options: &[(
                 Some((n, _)) => format!("{} {n}", cell.label),
                 None => cell.label.to_string(),
             };
-            resp.widget_info(|| egui::WidgetInfo::selected(egui::WidgetType::Button, true, on, &name));
+            resp.widget_info(|| egui::WidgetInfo::selected(egui::Role::Button, true, on, &name));
             if resp.on_hover_text(cell.tip).on_hover_cursor(egui::CursorIcon::PointingHand).clicked() && !on {
                 *value = *opt;
                 changed = true;
@@ -426,8 +426,8 @@ pub fn progress(ui: &mut Ui, fraction: Option<f32>, caption: &str, color: Color3
         }
     }
     p.text(egui::pos2(rect.left(), rect.top() + 9.0), egui::Align2::LEFT_CENTER, caption, egui::FontId::new(12.0, theme::medium()), t.muted);
-    let resp = ui.interact(rect, ui.id().with(("progress", caption)), Sense::hover());
-    resp.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::ProgressIndicator, true, caption));
+    let resp = ui.interact(rect, ui.scope_id().with(("progress", caption)), Sense::hover());
+    resp.widget_info(|| egui::WidgetInfo::labeled(egui::Role::ProgressIndicator, true, caption));
 }
 
 pub fn human_bytes(n: u64) -> String {
@@ -474,7 +474,7 @@ pub fn glyph_button(ui: &mut Ui, glyph: Glyph, tip: &str) -> Response {
             p.line_segment([m + vec2(-s, s), m + vec2(s, -s)], Stroke::new(1.5, c));
         }
     }
-    resp.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Button, true, tip));
+    resp.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Button, true, tip));
     resp.on_hover_text(tip).on_hover_cursor(egui::CursorIcon::PointingHand)
 }
 
@@ -537,7 +537,7 @@ fn icon_link(ui: &mut Ui, size: f32, link: &IconLink<'_>) {
     let (rect, resp) = ui.allocate_exact_size(vec2(size + 2.0 * pad, size + 2.0 * pad), Sense::click());
     let color = if resp.hovered() { t.ink_strong } else { t.faint };
     egui::Image::new(icon).tint(color).paint_at(ui, rect.shrink(pad));
-    resp.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Link, true, &link.label));
+    resp.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Link, true, &link.label));
     let resp = resp.on_hover_text(&link.tip).on_hover_cursor(egui::CursorIcon::PointingHand);
     if resp.clicked() {
         ui.ctx().open_url(egui::OpenUrl::new_tab(link.url));

@@ -8,7 +8,7 @@ use super::detect::system_lang;
 /// The writing system a language is drawn in, and so the system font it needs. Languages that
 /// share one can share a face; Simplified and Traditional Chinese do not (they want different
 /// faces), so each script is its own. The bundled faces have no CJK glyphs, so a language with a
-/// script borrows a system font for it (`crate::theme::cjk_font`).
+/// script is drawn with the system's fonts (`crate::theme::font_stack`).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Script {
     Chinese,

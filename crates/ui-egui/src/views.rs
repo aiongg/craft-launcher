@@ -195,7 +195,7 @@ impl LauncherUi {
                         .hint_text(tl!("Search apps"))
                         .desired_width(200.0)
                         .min_size(vec2(0.0, theme::CONTROL_H))
-                        .vertical_align(egui::Align::Center)
+                        .align(egui::Align2::LEFT_CENTER)
                         .margin(vec2(10.0, 0.0)),
                 );
                 if self.settings.view == ViewMode::Grid && !compact {
@@ -235,7 +235,7 @@ impl LauncherUi {
     }
 
     fn sort_picker(&mut self, ui: &mut Ui) {
-        egui::ComboBox::from_id_salt("sort")
+        let picker = egui::ComboBox::from_id_salt("sort")
             .selected_text(RichText::new(grid_sort_label(grid_sort_now(&self.settings))).size(13.0))
             .width(190.0)
             .show_ui(ui, |ui| {
@@ -247,6 +247,8 @@ impl LauncherUi {
                     }
                 }
             });
+        // The "Sort" caption beside it is left out where it doesn't fit, so the picker names itself.
+        ui.ctx().accesskit_node_builder(picker.response.id, |node| node.set_label(tl!("Sort")));
     }
 
     /// Update every eligible app; used in the compact and full-width toolbars.
@@ -405,7 +407,7 @@ impl LauncherUi {
         let app = entry.app;
         let hovered = ui.rect_contains_pointer(rect);
         let wipe = if self.reduce_motion { 0.0 } else { 0.3 };
-        let lift = ui.ctx().animate_bool_with_time(ui.id().with(("card-hover", id)), hovered, wipe);
+        let lift = ui.ctx().animate_bool_with_time(ui.scope_id().with(("card-hover", id)), hovered, wipe);
         // An app that is not installed is drawn in greys (icon, name, version, accent), and in its
         // colours while the pointer is over its card.
         let installed = entry.status(self.platform, self.caps.manage_apps).is_installed();
@@ -415,8 +417,8 @@ impl LauncherUi {
         // The whole card opens the app's page. Added before the card's own links and buttons, so
         // they sit on top of it and keep their clicks.
         if AppDetails::by_id(id).is_some() {
-            let open = ui.interact(rect, ui.id().with(("card-open", id)), Sense::click());
-            open.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Button, true, fmt(tl!("{name} details"), &[("name", app.name)])));
+            let open = ui.interact(rect, ui.scope_id().with(("card-open", id)), Sense::click());
+            open.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Button, true, fmt(tl!("{name} details"), &[("name", app.name)])));
             if open.on_hover_cursor(egui::CursorIcon::PointingHand).clicked() {
                 self.detail = Some(id.to_string());
             }
@@ -464,7 +466,7 @@ impl LauncherUi {
             // The slot is as tall as the text beside it when that is taller, so the two share a centre.
             let block = lines_height(ui, &[&name, &tagline], GAP);
             let (slot, icon_response) = ui.allocate_exact_size(vec2(ICON, block.max(ICON)), Sense::hover());
-            icon_response.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Image, true, fmt(tl!("{name} icon"), &[("name", app.name)])));
+            icon_response.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Image, true, fmt(tl!("{name} icon"), &[("name", app.name)])));
             // The icon rises a little on hover, over a soft drop shadow (the site's only shadow).
             let icon_rect = Rect::from_center_size(slot.center(), vec2(ICON, ICON)).translate(vec2(0.0, -4.0 * lift));
             ui.painter().add(
@@ -592,7 +594,7 @@ impl LauncherUi {
                                 let arrow_color = if active { t.accent_ink } else { t.faint };
                                 p.add(egui::Shape::convex_polygon(pts, arrow_color, Stroke::NONE));
                             }
-                            resp.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Button, true, label));
+                            resp.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Button, true, label));
                             if resp.on_hover_text(tip).on_hover_cursor(egui::CursorIcon::PointingHand).clicked() {
                                 sort_clicked = Some(k);
                             }
@@ -611,13 +613,9 @@ impl LauncherUi {
                                 }
                                 // Clicking the app's cell opens its page (the content is added after, so it wins any hit).
                                 if AppDetails::by_id(id).is_some() {
-                                    let open = ui.interact(ui.max_rect(), ui.id().with(("row-open", id)), Sense::click());
+                                    let open = ui.interact(ui.max_rect(), ui.scope_id().with(("row-open", id)), Sense::click());
                                     open.widget_info(|| {
-                                        egui::WidgetInfo::labeled(
-                                            egui::WidgetType::Button,
-                                            true,
-                                            fmt(tl!("{name} details"), &[("name", entry.app.name)]),
-                                        )
+                                        egui::WidgetInfo::labeled(egui::Role::Button, true, fmt(tl!("{name} details"), &[("name", entry.app.name)]))
                                     });
                                     if open.on_hover_cursor(egui::CursorIcon::PointingHand).clicked() {
                                         self.detail = Some(id.to_string());

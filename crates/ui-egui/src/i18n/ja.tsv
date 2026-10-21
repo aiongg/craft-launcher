@@ -18,7 +18,7 @@
 # Shortcut keys keep their key-cap names (Shift, Alt, Ctrl, Cmd, Esc).
 # Trailing "…" (U+2026) must be preserved. Placeholders {name}, {n}, {version}, {count}, {v},
 # {what}, {unit}, {real}, {e} must appear in translation.
-# Japanese has one plural form. Shown with the system's Japanese font (see cjk_font.rs); where the
+# Japanese has one plural form. Shown with the system's Japanese font (see theme.rs); where the
 # system has none, the interface stays in English.
 
 	Launcher	Launcher

@@ -2,7 +2,7 @@
 # Format: context<TAB>English source<TAB>translation.
 # Original translations from the English UI. Product and app names (ArtCraft Launcher and its
 # "Launcher" tag, Craft App Suite, PhotoCraft…) and third-party names stay unchanged.
-# Shown with the system's Chinese font (PingFang, Microsoft YaHei, Noto Sans CJK…): see cjk_font.rs.
+# Shown with the system's Chinese font (PingFang, Microsoft YaHei, Noto Sans CJK…): see theme.rs.
 # Chinese has one plural form. Placeholders and trailing ellipses are preserved.
 
 	Launcher	Launcher

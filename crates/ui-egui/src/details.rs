@@ -98,7 +98,7 @@ impl LauncherUi {
         // Asked every frame, even while closed, so the first opening starts from 0 and slides.
         let open = self.detail.is_some();
         let slide = if self.reduce_motion { 0.0 } else { SLIDE_SECS };
-        let k = ctx.animate_bool_with_time_and_easing(Id::new("details-slide"), open, slide, easing::cubic_out);
+        let k = ctx.animate_bool_with_time_and_easing(Id::unique("details-slide"), open, slide, easing::cubic_out);
         let Some(id) = self.detail_shown.clone() else { return };
         let Some(details) = AppDetails::by_id(&id) else {
             self.detail = None;
@@ -125,7 +125,7 @@ impl LauncherUi {
         let panel = Rect::from_center_size(area.center() + vec2(0.0, (1.0 - k) * 24.0), vec2(width, height));
         let (previous, next) = self.neighbour_apps(&id);
         self.details_scrim(ctx, area, k, &t);
-        egui::Area::new(Id::new("details-drawer")).order(Order::Foreground).fixed_pos(panel.min).constrain(false).show(ctx, |ui| {
+        egui::Area::new(Id::unique("details-drawer")).order(Order::Foreground).fixed_pos(panel.min).constrain(false).show(ctx, |ui| {
             ui.set_opacity(k.clamp(0.0, 1.0));
             let painter = ui.painter();
             painter.add(theme::shadow(&t).as_shape(panel, CornerRadius::ZERO));
@@ -267,7 +267,7 @@ impl LauncherUi {
 
     /// The page behind the drawer, dimmed (egui can't blur what is under a layer); a click on it closes the drawer.
     fn details_scrim(&mut self, ctx: &egui::Context, area: Rect, k: f32, t: &Tokens) {
-        egui::Area::new(Id::new("details-scrim")).order(Order::Middle).fixed_pos(area.min).show(ctx, |ui| {
+        egui::Area::new(Id::unique("details-scrim")).order(Order::Middle).fixed_pos(area.min).show(ctx, |ui| {
             let (rect, resp) = ui.allocate_exact_size(area.size(), Sense::click());
             ui.painter().rect_filled(rect, CornerRadius::ZERO, theme::scrim(t, k));
             if resp.on_hover_cursor(egui::CursorIcon::Default).clicked() {
@@ -393,7 +393,7 @@ impl LauncherUi {
         let src = self.picture_source(details.id, shot.key);
         let failed = self.failure(details.id, shot.key);
         let full = ctx.content_rect();
-        egui::Area::new(Id::new("details-lightbox")).order(Order::Tooltip).fixed_pos(full.min).show(ctx, |ui| {
+        egui::Area::new(Id::unique("details-lightbox")).order(Order::Tooltip).fixed_pos(full.min).show(ctx, |ui| {
             let (rect, backdrop) = ui.allocate_exact_size(full.size(), Sense::click());
             ui.painter().rect_filled(rect, CornerRadius::ZERO, theme::backdrop());
             // As large as the window allows, but no larger than 1400 points: the files are 1200 px wide.
@@ -403,7 +403,7 @@ impl LauncherUi {
             match src {
                 Some(src) => egui::Image::new(src).paint_at(ui, pic),
                 // Flipped to a picture that hasn't arrived: the same frame, saying so.
-                None => placeholder(ui, pic, Id::new("lightbox-placeholder"), failed.as_deref(), t, true),
+                None => placeholder(ui, pic, Id::unique("lightbox-placeholder"), failed.as_deref(), t, true),
             }
             ui.painter().rect_stroke(pic, CornerRadius::ZERO, Stroke::new(1.0, theme::backdrop_ink(40)), egui::StrokeKind::Outside);
             let caption = if count > 1 { format!("{} · {}/{count}", shot.caption, at + 1) } else { shot.caption.to_string() };
@@ -416,10 +416,10 @@ impl LauncherUi {
                 let y = pic.center().y - ARROW / 2.0;
                 let prev = Rect::from_min_size(pos2(pic.left() - 16.0 - ARROW, y), vec2(ARROW, ARROW));
                 let next = Rect::from_min_size(pos2(pic.right() + 16.0, y), vec2(ARROW, ARROW));
-                if arrow_button(ui, prev, Id::new("zoom-prev"), true, tl!("Previous picture (←)"), t) {
+                if arrow_button(ui, prev, Id::unique("zoom-prev"), true, tl!("Previous picture (←)"), t) {
                     self.flip_shot(count, false);
                 }
-                if arrow_button(ui, next, Id::new("zoom-next"), false, tl!("Next picture (→)"), t) {
+                if arrow_button(ui, next, Id::unique("zoom-next"), false, tl!("Next picture (→)"), t) {
                     self.flip_shot(count, true);
                 }
             }
@@ -443,7 +443,7 @@ impl LauncherUi {
         let pic = match self.picture_source(details.id, current.key) {
             Some(lead) => {
                 let image = ui.add(egui::Image::new(lead).fit_to_exact_size(vec2(w, w * SHOT_ASPECT)).sense(Sense::click()));
-                image.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Button, true, tl!("Enlarge picture")));
+                image.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Button, true, tl!("Enlarge picture")));
                 let rect = image.rect;
                 // The arrows below are added after the picture, so they keep their own clicks.
                 if image.on_hover_cursor(egui::CursorIcon::ZoomIn).on_hover_text(tl!("Click to enlarge")).clicked() {
@@ -454,7 +454,7 @@ impl LauncherUi {
             None => {
                 let (rect, _) = ui.allocate_exact_size(vec2(w, w * SHOT_ASPECT), Sense::hover());
                 let failed = self.failure(details.id, current.key);
-                placeholder(ui, rect, Id::new("lead-placeholder"), failed.as_deref(), t, false);
+                placeholder(ui, rect, Id::unique("lead-placeholder"), failed.as_deref(), t, false);
                 rect
             }
         };
@@ -468,10 +468,10 @@ impl LauncherUi {
         let y = pic.center().y - ARROW / 2.0;
         let prev = Rect::from_min_size(pos2(pic.left() + 10.0, y), vec2(ARROW, ARROW));
         let next = Rect::from_min_size(pos2(pic.right() - 10.0 - ARROW, y), vec2(ARROW, ARROW));
-        if arrow_button(ui, prev, Id::new("shot-prev"), true, tl!("Previous picture (←)"), t) {
+        if arrow_button(ui, prev, Id::unique("shot-prev"), true, tl!("Previous picture (←)"), t) {
             self.flip_shot(count, false);
         }
-        if arrow_button(ui, next, Id::new("shot-next"), false, tl!("Next picture (→)"), t) {
+        if arrow_button(ui, next, Id::unique("shot-next"), false, tl!("Next picture (→)"), t) {
             self.flip_shot(count, true);
         }
         widgets::hud(ui, &format!("{} · {}/{count}", current.caption, self.detail_shot.min(count - 1) + 1), t.faint);
@@ -516,7 +516,7 @@ fn placeholder(ui: &mut Ui, rect: Rect, id: Id, failed: Option<&str>, t: &Tokens
     let galley = ui.painter().layout(text.to_string(), egui::FontId::proportional(13.5), ink, (rect.width() - 32.0).max(1.0));
     ui.painter().galley(rect.center() - galley.size() / 2.0, galley, ink);
     let resp = ui.interact(rect, id, Sense::hover());
-    resp.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Label, true, text));
+    resp.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Label, true, text));
     if let Some(why) = failed {
         resp.on_hover_text(why);
     }
@@ -533,7 +533,7 @@ fn step_button(ui: &mut Ui, left: bool, tip: &str, t: &Tokens) -> bool {
         vec![pos2(c.x - s * 3.0, c.y - 5.5), pos2(c.x + s * 3.0, c.y), pos2(c.x - s * 3.0, c.y + 5.5)],
         Stroke::new(1.75, ink),
     ));
-    resp.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Button, true, tip));
+    resp.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Button, true, tip));
     resp.on_hover_cursor(egui::CursorIcon::PointingHand).on_hover_text(tip).clicked()
 }
 
@@ -578,6 +578,6 @@ fn arrow_button(ui: &mut Ui, rect: Rect, id: Id, left: bool, tip: &str, t: &Toke
     let (c, s) = (rect.center(), if left { -1.0 } else { 1.0 });
     let points = vec![pos2(c.x - s * 3.5, c.y - 6.0), pos2(c.x + s * 3.5, c.y), pos2(c.x - s * 3.5, c.y + 6.0)];
     painter.add(egui::Shape::line(points, Stroke::new(1.75, ink)));
-    resp.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Button, true, tip));
+    resp.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Button, true, tip));
     resp.on_hover_cursor(egui::CursorIcon::PointingHand).on_hover_text(tip).clicked()
 }

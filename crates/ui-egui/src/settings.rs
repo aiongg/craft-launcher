@@ -135,8 +135,9 @@ impl Settings {
 
     /// Display name for a language `code`: a language's name in itself, from the registry
     /// ([`LANGUAGES`](crate::i18n::LANGUAGES)). A language needing a CJK font is named in English,
-    /// with its own name added only while `installed` — the CJK face in the current font stack — is
-    /// that language (no other face draws it); "Auto" for `auto` and unknown codes, like
+    /// with its own name added only while `installed` — the CJK language the font stack was built
+    /// for — is that language, whose font the system is known to have; "Auto" for `auto` and
+    /// unknown codes, like
     /// [`Lang::from_pref`](crate::i18n::Lang::from_pref).
     pub fn language_label(code: &str, installed: Option<crate::i18n::Lang>) -> String {
         match crate::i18n::Lang::from_code(code) {

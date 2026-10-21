@@ -100,9 +100,8 @@ Chinese locales (`zh-CN`, `zh-SG`, `zh-Hans`, and POSIX forms such as `zh_CN.UTF
 Chinese; Traditional Chinese ones don't. To try a language without changing the setting, start the
 desktop app with `ARTCRAFT_LAUNCHER_LOCALE=pt-BR`, or add `?lang=ru` to the web address.
 
-The CJK languages are drawn with the system's own CJK font (Hiragino Sans or PingFang on macOS,
-Yu Gothic, Meiryo or Microsoft YaHei on Windows, Noto Sans CJK, IPA, Takao or WenQuanYi on Linux and
-FreeBSD). Where the system has no font for one, and in the web version, the interface stays in
+The CJK languages are drawn with the system's own CJK fonts, found through the system's font
+fallback (CoreText, DirectWrite, fontconfig). Where the system has no font for one, and in the web version, the interface stays in
 English and Settings says why. Product names and release notes stay as published; text without a
 translation falls back to English.
 
