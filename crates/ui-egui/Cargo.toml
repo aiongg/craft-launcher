@@ -22,11 +22,9 @@ log = { workspace = true }
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 # The OS's preferred UI languages, without spawning `defaults` or `reg.exe`.
 sys-locale = "0.3"
-# The system's fonts, for the CJK languages: the bundled faces have no CJK glyphs, and a CJK font
-# is too large to ship. Already in the build through craft-ui.
+# The system's fonts, for the CJK languages in a build without craft-fonts' faces (build.rs) and
+# for characters no embedded face has. Already in the build through craft-ui.
 egui_system_font_provider = "0.37"
-# A system face's metrics, to put it on the body font's baseline; egui already uses it.
-skrifa = { version = "0.44", default-features = false, features = ["std"] }
 # The system time zone, so dates read as this computer's calendar; already in the desktop build.
 jiff = "0.2"
 

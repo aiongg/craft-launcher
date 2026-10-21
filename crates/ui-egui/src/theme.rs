@@ -293,7 +293,7 @@ pub fn mono_bold() -> FontFamily {
 /// empty unless built with `CRAFT_FONTS_DIR`, and on the web.
 static CRAFT_FONTS: &[EmbeddedFace] = include!(concat!(env!("OUT_DIR"), "/craft_fonts.rs"));
 
-/// The bundled body font (Inter), whose baseline installed fonts are nudged onto.
+/// The bundled body font (Inter).
 const INTER: &[u8] = include_bytes!("../../../assets/fonts/Inter-Variable.ttf");
 
 /// A bundled face: the name egui knows it by, its file, its variation coordinates and its family.
@@ -392,22 +392,20 @@ mod system_fonts {
     use std::collections::BTreeMap;
     use std::sync::{Arc, Mutex, PoisonError};
 
-    use egui::{FallbackRequest, FontFamily, FontInsert, FontProvider};
+    use egui::{FallbackRequest, FontFamily, FontProvider};
     use egui_system_font_provider::SystemFontProvider;
-    use skrifa::MetadataProvider as _;
-    use skrifa::instance::{LocationRef, Size};
 
     use crate::i18n::Lang;
 
     /// The providers made so far, by UI language code ("" for the bundled faces' languages).
-    static PROVIDERS: Mutex<BTreeMap<&'static str, Arc<OnBodyBaseline>>> = Mutex::new(BTreeMap::new());
+    static PROVIDERS: Mutex<BTreeMap<&'static str, Arc<SystemFontProvider>>> = Mutex::new(BTreeMap::new());
     /// Whether each CJK language's characters were found, by language code.
     static FOUND: Mutex<BTreeMap<&'static str, bool>> = Mutex::new(BTreeMap::new());
 
     pub(super) fn provider(cjk: Option<Lang>) -> Arc<dyn FontProvider> {
         let key = cjk.map_or("", Lang::code);
         let mut providers = PROVIDERS.lock().unwrap_or_else(PoisonError::into_inner);
-        providers.entry(key).or_insert_with(|| Arc::new(OnBodyBaseline(SystemFontProvider::new().with_locale(cjk.map(Lang::code))))).clone()
+        providers.entry(key).or_insert_with(|| Arc::new(SystemFontProvider::new().with_locale(cjk.map(Lang::code)))).clone()
     }
 
     pub(super) fn found(lang: Lang) -> Option<bool> {
@@ -429,43 +427,6 @@ mod system_fonts {
         }
         FOUND.lock().unwrap_or_else(PoisonError::into_inner).insert(lang.code(), found);
         found
-    }
-
-    /// `(ascent, ascent + |descent| + leading) / units_per_em` of face `index` in `data`.
-    pub(super) fn face_metrics(data: &[u8], index: u32) -> (f32, f32) {
-        let Ok(font) = skrifa::FontRef::from_index(data, index) else { return (0.0, 0.0) };
-        let metrics = font.metrics(Size::unscaled(), LocationRef::default());
-        let upem = f32::from(metrics.units_per_em);
-        if upem <= 0.0 {
-            return (0.0, 0.0);
-        }
-        (metrics.ascent / upem, (metrics.ascent - metrics.descent + metrics.leading) / upem)
-    }
-
-    /// The system font provider, with each face it finds nudged onto the body font's baseline.
-    ///
-    /// egui puts a fallback glyph's baseline at that face's own ascent and only centres the two
-    /// line boxes (`galley_from_rows`), so a face whose metrics differ from the body font's rides
-    /// off the baseline: a face with a half-em line gap, for one, sat about a quarter em high.
-    pub(super) struct OnBodyBaseline(SystemFontProvider);
-
-    impl OnBodyBaseline {
-        fn nudge(mut insert: FontInsert) -> FontInsert {
-            let (body_ascent, body_height) = face_metrics(super::INTER, 0);
-            let (face_ascent, face_height) = face_metrics(insert.data.bytes(), insert.data.index);
-            insert.data.tweak.y_offset_factor = (body_ascent - face_ascent) + 0.5 * (face_height - body_height);
-            insert
-        }
-    }
-
-    impl FontProvider for OnBodyBaseline {
-        fn fonts_for_family(&self, family: &FontFamily) -> Vec<FontInsert> {
-            self.0.fonts_for_family(family).into_iter().map(Self::nudge).collect()
-        }
-
-        fn font_for(&self, request: &FallbackRequest<'_>) -> Option<FontInsert> {
-            self.0.font_for(request).map(Self::nudge)
-        }
     }
 }
 
@@ -499,18 +460,9 @@ mod tests {
         assert_covers(&font_stack(None), samples);
     }
 
-    /// The baseline nudge reads a face's ascent and height; the reference is Inter's.
-    #[cfg(not(target_arch = "wasm32"))]
-    #[test]
-    fn face_metrics_reads_font_metrics() {
-        let (ascent, height) = system_fonts::face_metrics(INTER, 0);
-        assert!((ascent - 0.9688).abs() < 0.005, "{ascent}");
-        assert!((height - 1.21).abs() < 0.005, "{height}");
-        assert_eq!(system_fonts::face_metrics(b"not a font", 0), (0.0, 0.0));
-    }
-
-    /// A system CJK face sits on the Latin baseline, thanks to the nudge in `OnBodyBaseline`.
-    /// Without a CJK font (CI, the web) there is nothing to check.
+    /// A CJK face, embedded or found on the system, sits on the Latin baseline: the patched egui
+    /// puts fallback faces on the row's baseline. Without a CJK font (CI, the web) there is
+    /// nothing to check.
     #[test]
     fn cjk_sits_on_the_latin_baseline() {
         for info in LANGUAGES.iter().filter(|l| l.script.is_some()) {
@@ -533,14 +485,10 @@ mod tests {
             let font_id = FontId::new(size, FontFamily::Proportional);
             let galley = ctx.fonts_mut(|f| f.layout_no_wrap(format!("A{sample}"), font_id.clone(), Color32::WHITE));
             assert!(ctx.fonts_mut(|f| f.has_glyphs(&font_id, &sample.to_string())), "{}: no glyph for {sample:?}", lang.code());
-            // The one face found on the system: the bundled faces drew the `A`.
-            let y_offset_factor = ctx.fonts_mut(|f| f.discovered_fonts().first().map_or(0.0, |font| font.data.tweak.y_offset_factor));
             let glyphs = &galley.rows[0].row.glyphs;
             let pos = |c: char| glyphs.iter().find(|g| g.chr == c).map(|g| g.pos.y);
-            // `pos.y` is the baseline before the nudge (which moves the ink, not `pos`).
             if let (Some(latin), Some(cjk)) = (pos('A'), pos(sample)) {
-                let rendered = cjk + y_offset_factor * size;
-                assert!((rendered - latin).abs() < 1.0, "{}: latin {latin}, cjk {rendered}, nudge {y_offset_factor}", lang.code());
+                assert!((cjk - latin).abs() < 1.0, "{}: latin {latin}, cjk {cjk}", lang.code());
             }
         }
     }
