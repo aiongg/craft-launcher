@@ -154,7 +154,7 @@ fn simplified_chinese_switches_persists_and_keeps_install_actions() {
     h.run_steps(3);
     h.get_by_value("English").click();
     h.run_steps(2);
-    // Opening Settings doesn't load the (large) Chinese font: the picker names it in English.
+    // Opening Settings doesn't search the system's fonts: the picker names it in English.
     assert!(!artcraft_launcher_ui_egui::theme::cjk_font_loaded(artcraft_launcher_ui_egui::i18n::Lang::ZH_CN));
     // The native-name sort puts Chinese last, below the popup's scroll viewport. Scroll the
     // actual popup with a wheel over its visible first row before the physical pointer click.
@@ -188,7 +188,9 @@ fn simplified_chinese_switches_persists_and_keeps_install_actions() {
     );
     assert_eq!(h.state().as_ref().unwrap().settings.language, "en", "scrolling must not select a language");
     h.get_by_label("Simplified Chinese").click();
-    h.run_steps(3);
+    // A pass installs the language's fonts and the next draws nothing; with a CJK face's taller
+    // rows the dialog then settles one pass later.
+    h.run_steps(5);
     if !artcraft_launcher_ui_egui::theme::cjk_font_available(artcraft_launcher_ui_egui::i18n::Lang::ZH_CN) {
         // No Chinese font: choosing it keeps the UI in English, and Settings says why.
         assert_eq!(h.state().as_ref().unwrap().settings.language, "zh-CN");

@@ -400,10 +400,11 @@ fn japanese_locales_and_counts_work() {
     assert_eq!(message(Lang::JA, "PhotoCraft updated to 0.5.0"), "PhotoCraft を 0.5.0 に更新しました");
 }
 
-/// With the system's Chinese font installed, every UI family can draw the whole Chinese catalog.
-/// Machines without one (CI, the web) skip this; the UI then stays in English.
+/// With the embedded Chinese interface face or the system's Chinese font, every UI family can draw
+/// the whole Chinese catalog. Builds and machines without either (CI, the web) skip this; the UI
+/// then stays in English.
 #[test]
-fn system_font_covers_chinese_in_every_ui_family() {
+fn cjk_font_covers_chinese_in_every_ui_family() {
     use egui::{FontFamily, FontId};
     if !crate::theme::cjk_font_available(Lang::ZH_CN) {
         return;
@@ -434,10 +435,10 @@ fn system_font_covers_chinese_in_every_ui_family() {
     }
 }
 
-/// With a system CJK font installed, every UI family can draw the whole Japanese catalog.
-/// Machines without one (CI, the web) skip this.
+/// With the embedded Japanese interface face or a system CJK font, every UI family can draw the
+/// whole Japanese catalog. Builds and machines without either (CI, the web) skip this.
 #[test]
-fn system_font_covers_japanese_in_every_ui_family() {
+fn cjk_font_covers_japanese_in_every_ui_family() {
     use egui::{FontFamily, FontId};
     if !crate::theme::cjk_font_available(Lang::JA) {
         return;

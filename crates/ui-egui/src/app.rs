@@ -8,6 +8,7 @@ use artcraft_launcher_core::protocol::{
 use artcraft_launcher_core::release::Release;
 use artcraft_launcher_core::status::AppStatus;
 use artcraft_launcher_core::{Platform, SUITE};
+use craft_ui::direction::{self, HasDirection};
 
 use crate::i18n::set_current;
 use crate::model::AppEntry;
@@ -67,6 +68,16 @@ pub trait Host {
     }
     /// Quit the launcher for real (not just hide to the tray).
     fn quit(&mut self) {}
+}
+
+/// The launcher's pages, switched by the toggle at the start of the toolbar.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum Page {
+    /// The Craft App Suite.
+    #[default]
+    Apps,
+    /// Craft Font Manager (desktop only).
+    Fonts,
 }
 
 pub(crate) struct Toast {
@@ -169,7 +180,7 @@ pub struct LauncherUi {
     /// Fonts registered with `set_fonts` only exist from the next frame on; drawing with the named
     /// weights before then would abort.
     fonts_ready: bool,
-    /// The CJK language whose system font is installed, if any.
+    /// The CJK language the font stack was built for, if any.
     /// Set when such a language comes into use, then kept for the session.
     pub(crate) cjk_font: Option<crate::i18n::Lang>,
     sent_options: Option<BackendOptions>,
@@ -191,11 +202,14 @@ pub struct LauncherUi {
     /// Toasts created from logic (which may run with an old input time) or the UI. Their expiry is
     /// fixed when the next `ui` pass actually shows them.
     pending_toasts: Vec<(String, bool)>,
+    pub(crate) page: Page,
+    #[cfg(not(target_arch = "wasm32"))]
+    pub(crate) fonts: crate::fonts::FontsTab,
 }
 
 /// The language to draw in: the preference, or English where it needs a CJK font the system
 /// doesn't have (Settings says so), rather than boxes for every character. The only place the
-/// CJK font gets loaded: when such a language is selected, or Auto resolves to it.
+/// system's fonts are searched for one: when such a language is selected, or Auto resolves to it.
 pub(crate) fn effective_lang(pref: &str) -> crate::i18n::Lang {
     let lang = crate::i18n::Lang::from_pref(pref);
     if lang.needs_cjk_font() && !theme::cjk_font_available(lang) { crate::i18n::Lang::EN } else { lang }
@@ -270,7 +284,56 @@ impl LauncherUi {
             frame: None,
             flushed: Vec::new(),
             pending_toasts: Vec::new(),
+            page: Page::Apps,
+            #[cfg(not(target_arch = "wasm32"))]
+            fonts: crate::fonts::FontsTab::new(),
         }
+    }
+
+    /// The Craft App Suite as cards or a table, below the toolbar.
+    fn apps_page(&mut self, ui: &mut egui::Ui) {
+        let tokens = Tokens::get(ui.ctx());
+        let ids = self.visible_ids();
+        // The table is wider than a narrow window: let it scroll sideways too.
+        let scroll = match self.settings.view {
+            ViewMode::Grid => egui::ScrollArea::vertical(),
+            ViewMode::Table => egui::ScrollArea::both(),
+        };
+        scroll.auto_shrink(false).show(ui, |ui| {
+            if ids.is_empty() {
+                ui.add_space(40.0);
+                ui.vertical_centered(|ui| {
+                    crate::widgets::hud(ui, tl!("No apps match"), tokens.muted);
+                });
+            } else {
+                match self.settings.view {
+                    ViewMode::Grid => self.grid(ui, &ids),
+                    ViewMode::Table => self.table(ui, &ids),
+                }
+            }
+            ui.add_space(16.0);
+        });
+    }
+
+    /// The page the window shows.
+    pub fn page(&self) -> Page {
+        self.page
+    }
+
+    pub fn set_page(&mut self, page: Page) {
+        self.page = if cfg!(target_arch = "wasm32") { Page::Apps } else { page };
+    }
+
+    /// Builds the Fonts page from `options` instead of the user's fonts and font store (tests).
+    #[cfg(not(target_arch = "wasm32"))]
+    pub fn use_font_options(&mut self, options: craft_font_manager::Options) {
+        self.fonts = crate::fonts::FontsTab::with_options(options);
+    }
+
+    /// The Fonts page's panel, once the page has shown.
+    #[cfg(not(target_arch = "wasm32"))]
+    pub fn fonts_panel(&self) -> Option<&craft_font_manager::FontsPanel> {
+        self.fonts.panel()
     }
 
     /// Moves the UI to another window's context: fonts, image loaders, the theme and the animation
@@ -759,6 +822,10 @@ impl LauncherUi {
             theme::apply(&ctx, self.settings.theme);
             self.applied_theme = Some(self.settings.theme);
         }
+        let dir = direction::resolve(lang.code(), direction::Setting::Language);
+        if ctx.direction() != dir {
+            direction::apply(&ctx, dir);
+        }
         let now = ctx.input(|i| i.time);
         if now >= self.motion_recheck {
             self.reduce_motion = host.reduce_motion();
@@ -785,32 +852,18 @@ impl LauncherUi {
             .exact_size(crate::views::FOOTER_H)
             .resizable(false)
             .show(ui, |ui| self.footer(ui));
-        egui::CentralPanel::default()
-            .frame(egui::Frame::new().fill(tokens.bg).inner_margin(egui::Margin { left: 20, right: 20, top: 18, bottom: 0 }))
-            .show(ui, |ui| {
-                self.toolbar(ui);
-                ui.add_space(18.0);
-                let ids = self.visible_ids();
-                // The table is wider than a narrow window: let it scroll sideways too.
-                let scroll = match self.settings.view {
-                    ViewMode::Grid => egui::ScrollArea::vertical(),
-                    ViewMode::Table => egui::ScrollArea::both(),
-                };
-                scroll.auto_shrink(false).show(ui, |ui| {
-                    if ids.is_empty() {
-                        ui.add_space(40.0);
-                        ui.vertical_centered(|ui| {
-                            crate::widgets::hud(ui, tl!("No apps match"), tokens.muted);
-                        });
-                    } else {
-                        match self.settings.view {
-                            ViewMode::Grid => self.grid(ui, &ids),
-                            ViewMode::Table => self.table(ui, &ids),
-                        }
-                    }
-                    ui.add_space(16.0);
-                });
-            });
+        egui::CentralPanel::default().frame(egui::Frame::new().fill(tokens.bg)).show(ui, |ui| {
+            egui::Frame::new().inner_margin(egui::Margin { left: 20, right: 20, top: 18, bottom: 0 }).show(ui, |ui| self.toolbar(ui));
+            match self.page {
+                // The panel keeps its own margins.
+                #[cfg(not(target_arch = "wasm32"))]
+                Page::Fonts => self.fonts.ui(ui, &mut self.settings.fonts, lang.code()),
+                _ => {
+                    ui.add_space(18.0);
+                    egui::Frame::new().inner_margin(egui::Margin::symmetric(20, 0)).show(ui, |ui| self.apps_page(ui));
+                }
+            }
+        });
         self.details_drawer(&ctx);
         self.dialogs(&ctx, host);
         self.flush_actions();
@@ -1245,29 +1298,25 @@ mod tests {
         panic!("the picker click must select Simplified Chinese");
     }
 
-    /// Selecting Simplified Chinese must keep the selection frame itself in English: its face is
-    /// installed at the next pass's font gate, and drawing the chosen language before then asks
-    /// the bundled (CJK-free) fonts for Chinese glyphs. The old `effective_lang` selector sets the
-    /// current language to Chinese inside this frame and fails the strict policy.
+    /// Selecting Simplified Chinese must keep the selection frame itself in English: its font
+    /// stack is installed at the next pass's font gate, and drawing the chosen language before
+    /// then asks the stack without its Chinese faces for Chinese glyphs. The old `effective_lang`
+    /// selector sets the current language to Chinese inside this frame and fails the strict policy.
     #[test]
     fn selecting_chinese_keeps_the_selection_frame_english_until_the_font_gate() {
         use crate::i18n::Lang;
         use egui_kittest::kittest::Queryable;
 
-        // Available: the system "has" a Chinese face. The seam's face is the real bundled Inter,
-        // which has no CJK glyphs, so the gate can install a face without faking coverage.
+        // Available: the build or the system "has" a Chinese face, whatever this machine has.
         {
             let _fonts = crate::theme::CjkFontOverride::available(Lang::ZH_CN);
             let mut h = cjk_picker_harness();
             h.run_steps(8);
             open_language_picker(&mut h);
             select_chinese_in_its_settings_frame(&mut h);
-            let marker = crate::theme::cjk_font(Lang::ZH_CN).expect("the seam answers with the bundled face");
-            let inter: &[u8] = include_bytes!("../../../assets/fonts/Inter-Variable.ttf");
-            assert_eq!(marker.bytes(), inter, "the available marker must be the real Inter face, not a CJK face");
 
-            // Exactly one gate pass: it installs the face and draws nothing. We stop here and do
-            // not run the following pass, which would panic on missing Chinese glyphs in the Inter stand-in.
+            // Exactly one gate pass: it installs the Chinese stack and draws nothing. We stop
+            // here: the following pass draws Chinese with whatever faces this machine has.
             h.step();
             {
                 let launcher = h.state().as_ref().expect("harness state");

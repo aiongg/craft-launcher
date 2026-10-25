@@ -2,10 +2,10 @@
 //! display type, Inter body text and Geist Mono labels. Widgets read [`Tokens::get`]; nothing
 //! hard-codes a colour.
 
-use std::sync::Arc;
-
+// The generated table is written as `EmbeddedFace` literals, which craft-ui's `CraftFace` matches.
+use craft_ui::fonts::{CraftFace as EmbeddedFace, Family, I18nScripts, Stack, UiFonts};
 use egui::epaint::text::VariationCoords;
-use egui::{Color32, CornerRadius, FontData, FontDefinitions, FontFamily, FontId, FontTweak, Stroke, TextStyle, Visuals};
+use egui::{Color32, CornerRadius, FontData, FontFamily, FontId, FontTweak, Stroke, TextStyle, Visuals};
 use serde::{Deserialize, Serialize};
 
 use crate::i18n::Lang;
@@ -289,107 +289,121 @@ pub fn mono_bold() -> FontFamily {
     FontFamily::Name("mono-bold".into())
 }
 
-/// A font registered under `name`: its file, its variation coordinates and its family.
-type Face<'a> = (&'a str, &'static [u8], &'a [([u8; 4], f32)], FontFamily);
+/// craft-fonts' Chinese and Japanese interface faces, cut to the catalogs' characters (build.rs);
+/// empty unless built with `CRAFT_FONTS_DIR`, and on the web.
+static CRAFT_FONTS: &[EmbeddedFace] = include!(concat!(env!("OUT_DIR"), "/craft_fonts.rs"));
 
-/// Registers the site's three variable fonts, each at the weights (and width) it uses there.
-/// `cjk`: the CJK language to draw, whose system font is added behind everything else, or `None`
-/// for a language that needs no CJK font.
-pub fn install_fonts(ctx: &egui::Context, cjk: Option<Lang>) {
-    ctx.set_fonts(font_definitions(cjk));
-}
+/// The bundled body font (Inter).
+const INTER: &[u8] = include_bytes!("../../../assets/fonts/Inter-Variable.ttf");
 
-/// The font stack both the native and the web app use.
-///
-/// It starts from egui's `default_fonts` and enables `monochrome_emoji_fonts` at the workspace
-/// level, so arbitrary release-note, feed and alert text keeps the monochrome emoji coverage 0.36
-/// provided on every target, web included. The fixed gear and refresh controls stay painter-drawn
-/// [`crate::widgets::Glyph`]s rather than font glyphs. The one optional extra is a system CJK face,
-/// added only when the desktop selected a CJK language; neither a CJK face nor a system-font
-/// provider is bundled.
-fn font_definitions(cjk: Option<Lang>) -> FontDefinitions {
-    const INTER: &[u8] = include_bytes!("../../../assets/fonts/Inter-Variable.ttf");
+/// A bundled face: the name egui knows it by, its file, its variation coordinates and its family.
+type Face = (&'static str, &'static [u8], &'static [(&'static [u8; 4], f32)], FontFamily);
+
+/// The site's three variable fonts, each at the weights (and width) it uses there.
+fn bundled_faces() -> [Face; 7] {
     const ARCHIVO: &[u8] = include_bytes!("../../../assets/fonts/Archivo-Variable.ttf");
     const GEIST_MONO: &[u8] = include_bytes!("../../../assets/fonts/GeistMono-Variable.ttf");
-    let mut fonts = FontDefinitions::default();
-    // egui's own Latin faces and the small monochrome icon face stay behind ours.
-    let fallback: Vec<String> = fonts.families.get(&FontFamily::Proportional).cloned().unwrap_or_default();
-    let faces: [Face<'_>; 7] = [
-        ("Inter", INTER, &[(*b"wght", 400.0), (*b"opsz", 14.0)], FontFamily::Proportional),
-        ("Inter-Medium", INTER, &[(*b"wght", 500.0), (*b"opsz", 14.0)], medium()),
-        ("Inter-SemiBold", INTER, &[(*b"wght", 600.0), (*b"opsz", 14.0)], semibold()),
-        ("Archivo-Display", ARCHIVO, &[(*b"wght", 620.0), (*b"wdth", 118.0)], display()),
-        ("GeistMono", GEIST_MONO, &[(*b"wght", 400.0)], FontFamily::Monospace),
-        ("GeistMono-Medium", GEIST_MONO, &[(*b"wght", 500.0)], mono()),
-        ("GeistMono-Bold", GEIST_MONO, &[(*b"wght", 700.0)], mono_bold()),
-    ];
-    for (name, bytes, coords, family) in faces {
-        // No subpixel binning: these fonts carry no hinting instructions, so a glyph drawn at a
-        // fractional x smears each stem across two pixels, leaving small text blurry at 100 %.
-        let tweak = FontTweak { coords: VariationCoords::new(coords.iter().copied()), subpixel_binning: Some(false), ..Default::default() };
-        fonts.font_data.insert(name.to_owned(), Arc::new(FontData::from_static(bytes).tweak(tweak)));
-        let mut stack = vec![name.to_owned()];
-        stack.extend(fallback.iter().cloned());
-        fonts.families.insert(family, stack);
-    }
-    // The CJK face, behind everything else, from the system: only when asked for, as the font is
-    // large.
-    if let Some(lang) = cjk
-        && let Some(font) = cjk_font(lang)
-    {
-        fonts.font_data.insert("CJK".to_owned(), font);
-        for stack in fonts.families.values_mut() {
-            stack.push("CJK".to_owned());
-        }
-    }
-    fonts
+    [
+        ("Inter", INTER, &[(b"wght", 400.0), (b"opsz", 14.0)], FontFamily::Proportional),
+        ("Inter-Medium", INTER, &[(b"wght", 500.0), (b"opsz", 14.0)], medium()),
+        ("Inter-SemiBold", INTER, &[(b"wght", 600.0), (b"opsz", 14.0)], semibold()),
+        ("Archivo-Display", ARCHIVO, &[(b"wght", 620.0), (b"wdth", 118.0)], display()),
+        ("GeistMono", GEIST_MONO, &[(b"wght", 400.0)], FontFamily::Monospace),
+        ("GeistMono-Medium", GEIST_MONO, &[(b"wght", 500.0)], mono()),
+        ("GeistMono-Bold", GEIST_MONO, &[(b"wght", 700.0)], mono_bold()),
+    ]
 }
 
-/// The system's font for a CJK language, read once per language (tens of MB). Desktop only: the
-/// web build has none, so CJK text can't be drawn there.
-pub fn cjk_font(lang: Lang) -> Option<Arc<FontData>> {
-    #[cfg(test)]
-    {
-        let overridden = CJK_FONT_OVERRIDE.with(|slot| slot.borrow().as_ref().and_then(|overrides| overrides.get(lang.code()).cloned()));
-        if let Some(font) = overridden {
-            return font;
+/// The font stack for drawing `cjk`, or for the languages the bundled faces cover with `None`:
+/// the bundled faces, then (desktop only) the system's fonts for whatever they lack, then egui's.
+pub fn font_stack(cjk: Option<Lang>) -> Stack {
+    let languages: Vec<&str> = Lang::all().map(Lang::code).collect();
+    let mut fonts = UiFonts::new(&I18nScripts).languages(&languages).ui_language(cjk.map_or("en", Lang::code));
+    for (name, bytes, coords, family) in bundled_faces() {
+        // No subpixel binning: these fonts carry no hinting instructions, so a glyph drawn at a
+        // fractional x smears each stem across two pixels, leaving small text blurry at 100 %.
+        let tweak = FontTweak {
+            coords: VariationCoords::new(coords.iter().map(|(tag, value)| (**tag, *value))),
+            subpixel_binning: Some(false),
+            ..Default::default()
+        };
+        // The weight installed fonts draw at in this family.
+        let weight = coords.iter().find(|(tag, _)| *tag == b"wght").map_or(400, |(_, w)| *w as u16);
+        if let FontFamily::Name(family_name) = &family {
+            fonts = fonts.family(Family::named(family_name).weight(weight));
         }
+        fonts = fonts.app_face(name, FontData::from_static(bytes).tweak(tweak), &[family]);
     }
+    fonts = fonts.craft_faces(CRAFT_FONTS);
     #[cfg(not(target_arch = "wasm32"))]
     {
-        CJK_FONTS.lock().unwrap_or_else(std::sync::PoisonError::into_inner).entry(lang.code()).or_insert_with(|| load_cjk(lang)).clone()
+        fonts = fonts.system_provider(system_fonts::provider(cjk));
+    }
+    fonts.stack()
+}
+
+/// Installs [`font_stack`] in `ctx`. `cjk`: the CJK language to draw, whose system font then
+/// leads the search for characters the bundled faces lack, or `None`.
+pub fn install_fonts(ctx: &egui::Context, cjk: Option<Lang>) {
+    font_stack(cjk).install(ctx);
+}
+
+/// Does this build embed an interface face for the CJK language `lang`? Desktop builds made with
+/// `CRAFT_FONTS_DIR` do; then the system's fonts are never searched for it.
+pub fn cjk_font_embedded(lang: Lang) -> bool {
+    lang.script().is_some_and(|script| CRAFT_FONTS.iter().any(|face| face.scripts.contains(&script.tag())))
+}
+
+/// Has the system font for `lang` already been looked for and found? Never looks.
+pub fn cjk_font_loaded(lang: Lang) -> bool {
+    #[cfg(not(target_arch = "wasm32"))]
+    {
+        system_fonts::found(lang) == Some(true)
     }
     #[cfg(target_arch = "wasm32")]
     {
         let _ = lang;
-        None
+        false
     }
 }
 
-/// Loads the system font for the CJK language `lang`: the face for its script, or `None` where the
-/// system has none. Nothing falls back to another script's face — a face for a different script
-/// leaves its characters as tofu — so a language without its font stays in English, like any other.
-#[cfg(not(target_arch = "wasm32"))]
-fn load_cjk(lang: Lang) -> Option<Arc<FontData>> {
-    crate::cjk_font::load(lang.script()?).map(Arc::new)
+/// Can the CJK language `lang` be drawn? With no embedded face for it, looks through the system's
+/// fonts on the first call. The web build has neither, so CJK text can't be drawn there. A font
+/// for another CJK language doesn't count: it leaves this one's own characters as tofu, so the
+/// language stays in English.
+pub fn cjk_font_available(lang: Lang) -> bool {
+    #[cfg(test)]
+    {
+        let overridden = CJK_FONT_OVERRIDE.with(|slot| slot.borrow().as_ref().and_then(|overrides| overrides.get(lang.code()).copied()));
+        if let Some(available) = overridden {
+            return available;
+        }
+    }
+    if cjk_font_embedded(lang) {
+        return true;
+    }
+    #[cfg(not(target_arch = "wasm32"))]
+    {
+        system_fonts::available(lang)
+    }
+    #[cfg(target_arch = "wasm32")]
+    {
+        false
+    }
 }
 
-/// The system fonts looked for so far, by language code.
-#[cfg(not(target_arch = "wasm32"))]
-static CJK_FONTS: std::sync::Mutex<std::collections::BTreeMap<&str, Option<Arc<FontData>>>> =
-    std::sync::Mutex::new(std::collections::BTreeMap::new());
-
 #[cfg(test)]
-type CjkFontOverrides = std::collections::BTreeMap<&'static str, Option<Arc<FontData>>>;
+type CjkFontOverrides = std::collections::BTreeMap<&'static str, bool>;
 
-// Test-only per-thread answer for cjk_font, scoped by CjkFontOverride.
+// Test-only per-thread answer for cjk_font_available, scoped by CjkFontOverride.
 #[cfg(test)]
 thread_local! {
     static CJK_FONT_OVERRIDE: std::cell::RefCell<Option<CjkFontOverrides>> =
         const { std::cell::RefCell::new(None) };
 }
 
-/// Scopes a test-only answer for [`cjk_font`], restoring the previous answer on drop.
+/// Scopes a test-only answer for [`cjk_font_available`], restoring the previous answer on drop,
+/// so a test doesn't depend on the build's embedded faces or the machine's fonts.
 #[cfg(test)]
 pub(crate) struct CjkFontOverride {
     previous: Option<CjkFontOverrides>,
@@ -397,22 +411,19 @@ pub(crate) struct CjkFontOverride {
 
 #[cfg(test)]
 impl CjkFontOverride {
-    /// The system has a face for `lang`: a real bundled face with no CJK glyphs stands in, so a
-    /// test can prove the font gate installed a face without faking CJK coverage or depending on
-    /// the machine.
+    /// `lang` can be drawn.
     pub(crate) fn available(lang: Lang) -> Self {
-        const INTER: &[u8] = include_bytes!("../../../assets/fonts/Inter-Variable.ttf");
-        Self::install(lang, Some(Arc::new(FontData::from_static(INTER))))
+        Self::install(lang, true)
     }
 
-    /// The system has no face for `lang`.
+    /// Neither the build nor the system has a face for `lang`.
     pub(crate) fn unavailable(lang: Lang) -> Self {
-        Self::install(lang, None)
+        Self::install(lang, false)
     }
 
-    fn install(lang: Lang, font: Option<Arc<FontData>>) -> Self {
+    fn install(lang: Lang, available: bool) -> Self {
         let mut overrides = std::collections::BTreeMap::new();
-        overrides.insert(lang.code(), font);
+        overrides.insert(lang.code(), available);
         let previous = CJK_FONT_OVERRIDE.with(|slot| slot.borrow_mut().replace(overrides));
         Self { previous }
     }
@@ -425,80 +436,178 @@ impl Drop for CjkFontOverride {
     }
 }
 
-/// Has the system font for `lang` already been loaded? Never loads it.
-pub fn cjk_font_loaded(lang: Lang) -> bool {
-    #[cfg(not(target_arch = "wasm32"))]
-    {
-        CJK_FONTS.lock().unwrap_or_else(std::sync::PoisonError::into_inner).get(lang.code()).is_some_and(Option::is_some)
-    }
-    #[cfg(target_arch = "wasm32")]
-    {
-        let _ = lang;
-        false
-    }
-}
+/// The system's fonts, through egui's system font provider: one per UI language, as its locale
+/// picks between the Chinese and Japanese forms of the same characters.
+#[cfg(not(target_arch = "wasm32"))]
+mod system_fonts {
+    use std::collections::BTreeMap;
+    use std::sync::{Arc, Mutex, PoisonError};
 
-/// Can the CJK language `lang` be drawn? Loads the system font on the first call ([`cjk_font`]).
-pub fn cjk_font_available(lang: Lang) -> bool {
-    cjk_font(lang).is_some()
+    use egui::{FallbackRequest, FontFamily, FontProvider};
+    use egui_system_font_provider::SystemFontProvider;
+
+    use crate::i18n::Lang;
+
+    /// The providers made so far, by UI language code ("" for the bundled faces' languages).
+    static PROVIDERS: Mutex<BTreeMap<&'static str, Arc<dyn FontProvider>>> = Mutex::new(BTreeMap::new());
+    /// Whether each CJK language's characters were found, by language code.
+    static FOUND: Mutex<BTreeMap<&'static str, bool>> = Mutex::new(BTreeMap::new());
+
+    pub(super) fn provider(cjk: Option<Lang>) -> Arc<dyn FontProvider> {
+        let key = cjk.map_or("", Lang::code);
+        let mut providers = PROVIDERS.lock().unwrap_or_else(PoisonError::into_inner);
+        providers
+            .entry(key)
+            .or_insert_with(|| {
+                let system = Arc::new(SystemFontProvider::new().with_locale(cjk.map(Lang::code)));
+                // Chinese also looks for a MiSans installed by hand, after the system's own faces.
+                if cjk == Some(Lang::ZH_CN) { Arc::new(crate::misans::WithMiSans::new(system)) } else { system }
+            })
+            .clone()
+    }
+
+    pub(super) fn found(lang: Lang) -> Option<bool> {
+        FOUND.lock().unwrap_or_else(PoisonError::into_inner).get(lang.code()).copied()
+    }
+
+    /// Does the system have a face for every character of the language's own name? That name
+    /// uses characters only its own script has (简 is Simplified Chinese, 語 is Japanese).
+    pub(super) fn available(lang: Lang) -> bool {
+        if let Some(found) = found(lang) {
+            return found;
+        }
+        let provider = provider(Some(lang));
+        let family = FontFamily::Proportional;
+        let mut buf = [0; 4];
+        let found = lang.name().chars().all(|c| provider.font_for(&FallbackRequest { cluster: c.encode_utf8(&mut buf), family: &family }).is_some());
+        if !found {
+            log::warn!("no font for {} found on this system", lang.english_name());
+        }
+        FOUND.lock().unwrap_or_else(PoisonError::into_inner).insert(lang.code(), found);
+        found
+    }
 }
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+    use craft_ui::fonts::{Sample, assert_covers};
+    use egui::{Color32, FontFamily, FontId};
 
-    /// The app's bundled font set is deliberate and bounded: our three families, egui's Latin
-    /// fallbacks, its small monochrome icon face and the two attributed monochrome emoji faces.
-    /// The same function is used by the desktop and web builds, so this upper bound holds for both.
+    use super::*;
+    use crate::i18n::LANGUAGES;
+
+    /// Catalog entries no code looks up: the view switch and the search field draw their icons
+    /// themselves. egui's own faces had these symbols until 0.37.
+    const UNUSED: [&str; 3] = ["⊞  Grid", "☰  Table", "🔍  Search apps"];
+
+    /// The bundled and embedded faces draw every string of every catalog in a language they cover,
+    /// and that language's own name in the picker, without any system font. CJK catalogs count when
+    /// the build embeds their interface face (built with `CRAFT_FONTS_DIR`).
     #[test]
-    fn production_fonts_are_latin_plus_attributed_monochrome_fallbacks() {
-        let fonts = font_definitions(None);
-        for expected in ["Inter", "Inter-Medium", "Inter-SemiBold", "Archivo-Display", "GeistMono", "GeistMono-Medium", "GeistMono-Bold"] {
-            assert!(fonts.font_data.contains_key(expected), "missing bundled face {expected}: {:?}", fonts.font_data.keys().collect::<Vec<_>>());
-        }
-        for fallback in ["Ubuntu-Light", "Hack", "egui-icons", "NotoEmoji-Regular", "emoji-icon-font"] {
-            assert!(fonts.font_data.contains_key(fallback), "missing egui fallback {fallback}");
-        }
-        assert_eq!(fonts.font_data.len(), 12, "unexpected extra faces: {:?}", fonts.font_data.keys().collect::<Vec<_>>());
-        for family in [egui::FontFamily::Proportional, egui::FontFamily::Monospace, medium(), semibold(), display(), mono(), mono_bold()] {
-            let stack = fonts.families.get(&family).unwrap_or_else(|| panic!("family {family:?} missing"));
-            assert_eq!(
-                stack.last().map(String::as_str),
-                Some("emoji-icon-font"),
-                "{family:?} must end at the bundled monochrome emoji fallback, without system fonts: {stack:?}"
-            );
-        }
+    fn bundled_faces_cover_every_shipped_string() {
+        let embedded = |code| Lang::from_code(code).is_some_and(cjk_font_embedded);
+        let samples = LANGUAGES.iter().filter(|info| info.script.is_none() || embedded(info.code)).flat_map(|info| {
+            let strings = info.source.lines().filter(|line| !line.starts_with('#')).filter_map(|line| {
+                let mut columns = line.split('\t');
+                let source = columns.nth(1).filter(|source| !UNUSED.contains(source))?;
+                Some([(source, source), (source, columns.next()?)])
+            });
+            let name = [(info.code, info.name)];
+            strings.flatten().chain(name).map(|(key, text)| Sample { language: info.code, key, text })
+        });
+        assert_covers(&font_stack(None), samples);
     }
 
-    /// Arbitrary network text must not depend on a system font: release notes, feed notices and
-    /// alerts can contain emoji. This is a strict fixture over representative dynamic text, not
-    /// just the fixed controls (whose gear/refresh glyphs are painter-drawn). It also pins the
-    /// bundled font-data upper bound, so a stray system face cannot make coverage pass.
+    /// Release notes, feed notices and alerts are network text and can contain emoji. egui's
+    /// monochrome emoji faces (the workspace's `monochrome_emoji_fonts`) draw them in every family
+    /// without a system font, so the web build draws them too.
     #[test]
-    fn bundled_font_stack_covers_representative_dynamic_release_and_feed_text() {
-        use egui::{FontFamily, FontId};
+    fn bundled_faces_cover_emoji_in_release_and_feed_text() {
+        use craft_ui::fonts::missing_glyphs;
         const DYNAMIC_TEXT: &str = concat!(
             "What's Changed: Faster exports 🚀 and fewer bugs 🐛 — New templates 🎨, ",
             "warnings ⚠ and a celebration 🎉 — ArtCraft news: ✨ ✅ ❌ 💡 🔒"
         );
-        let fonts = font_definitions(None);
-        assert_eq!(
-            fonts.font_data.len(),
-            12,
-            "the coverage test is only meaningful for the bundled stack: {:?}",
-            fonts.font_data.keys().collect::<Vec<_>>()
-        );
-        let ctx = egui::Context::default();
-        install_fonts(&ctx, None);
-        let mut output = ctx.run_ui(egui::RawInput::default(), |_| {});
-        output.textures_delta.clear();
+        let stack = font_stack(None);
         for family in [FontFamily::Proportional, FontFamily::Monospace, medium(), semibold(), display(), mono(), mono_bold()] {
-            ctx.fonts_mut(|fonts| {
-                assert!(
-                    fonts.has_glyphs(&FontId::new(14.0, family.clone()), DYNAMIC_TEXT),
-                    "{family:?} lacks a glyph in the representative dynamic notes/feed fixture"
-                );
-            });
+            let missing = missing_glyphs(&stack, &family, [Sample { language: "en", key: "notes", text: DYNAMIC_TEXT }], false);
+            assert!(missing.is_empty(), "{family:?} lacks {missing:?}");
+        }
+    }
+
+    /// Text no catalog has, typed into a field: a rare Han character, a Vietnamese letter and the
+    /// Command key. Drawing it never panics, Inter draws the letter and the key, and every
+    /// character a bundled, embedded or installed face has is drawn from that face, not as a box.
+    #[test]
+    fn a_field_draws_characters_outside_the_catalogs() {
+        use craft_ui::fonts::missing_glyphs;
+        use egui_kittest::Harness;
+        use egui_kittest::kittest::Queryable;
+
+        const TYPED: &str = "龘 ẫ ⌘";
+        let stack = font_stack(None);
+        assert_covers(&stack, [Sample { language: "und", key: "typed", text: "ẫ⌘" }]);
+
+        let mut harness = Harness::builder().allow_missing_glyphs().build_ui_state(
+            |ui, (installed, text): &mut (bool, String)| {
+                if !*installed {
+                    install_fonts(ui.ctx(), None);
+                    *installed = true;
+                }
+                ui.add(egui::TextEdit::singleline(text).hint_text("Search apps"));
+            },
+            (false, String::new()),
+        );
+        harness.get_by_role(egui::accesskit::Role::TextInput).focus();
+        harness.run();
+        harness.get_by_role(egui::accesskit::Role::TextInput).type_text(TYPED);
+        harness.run();
+        assert_eq!(harness.state().1, TYPED);
+
+        let font_id = FontId::proportional(14.0);
+        for c in TYPED.chars().filter(|c| !c.is_whitespace()) {
+            let text = c.to_string();
+            let some_face_has_it =
+                missing_glyphs(&stack, &FontFamily::Proportional, [Sample { language: "und", key: "typed", text: &text }], true).is_empty();
+            if some_face_has_it {
+                assert!(harness.ctx.fonts_mut(|f| f.has_glyph(&font_id, c)), "{c:?} has a face but is drawn as a box");
+            }
+        }
+    }
+
+    /// A CJK face, embedded or found on the system, sits on the Latin baseline. craft-ui fits the
+    /// face into the Latin row with a vertical offset, so the glyph's position says nothing about
+    /// where it is drawn: the check is on the ink. Without a CJK font (CI, the web) there is
+    /// nothing to check.
+    #[test]
+    fn cjk_sits_on_the_latin_baseline() {
+        for info in LANGUAGES.iter().filter(|l| l.script.is_some()) {
+            let Some(lang) = Lang::from_code(info.code) else { continue };
+            if !cjk_font_available(lang) {
+                continue;
+            }
+            // A character the language's own catalog uses, so the sample fits its script: the
+            // face must draw it, on the Latin baseline.
+            let Some(sample) =
+                info.source.lines().filter_map(|line| line.split('\t').nth(2)).flat_map(str::chars).find(|c| !c.is_ascii() && c.is_alphabetic())
+            else {
+                continue;
+            };
+            let ctx = egui::Context::default();
+            install_fonts(&ctx, Some(lang));
+            let mut output = ctx.run_ui(egui::RawInput::default(), |_| {});
+            output.textures_delta.clear();
+            let size = 20.0;
+            let font_id = FontId::new(size, FontFamily::Proportional);
+            assert!(ctx.fonts_mut(|f| f.has_glyphs(&font_id, &sample.to_string())), "{}: no glyph for {sample:?}", lang.code());
+            let layout = |text: String| ctx.fonts_mut(|f| f.layout_no_wrap(text, font_id.clone(), Color32::WHITE));
+            let latin = layout("A".to_owned());
+            let baseline = latin.rows[0].row.glyphs[0].pos.y;
+            let (latin, cjk) = (latin.mesh_bounds, layout(sample.to_string()).mesh_bounds);
+            // CJK ink reaches a little below the baseline and about as high as a capital.
+            let below = cjk.max.y - baseline;
+            assert!((0.0..=0.2 * size).contains(&below), "{}: {sample:?} ends {below} below the baseline", lang.code());
+            assert!((cjk.min.y - latin.min.y).abs() <= 0.1 * size, "{}: {sample:?} top {}, capital top {}", lang.code(), cjk.min.y, latin.min.y);
         }
     }
 }

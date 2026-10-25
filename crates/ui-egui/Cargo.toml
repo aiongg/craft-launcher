@@ -13,15 +13,21 @@ workspace = true
 [dependencies]
 artcraft-launcher-core = { workspace = true }
 egui = { workspace = true }
+craft-ui = { workspace = true }
 egui_extras = { workspace = true, features = ["image", "svg"] }
 image = { version = "0.25", default-features = false, features = ["png", "jpeg"] }
 serde = { workspace = true }
 log = { workspace = true }
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+# The Fonts page: Craft Font Manager's panel, the font store and the installed fonts.
+craft-font-manager = { workspace = true }
 # The OS's preferred UI languages, without spawning `defaults` or `reg.exe`.
 sys-locale = "0.3"
-# Finding the Simplified Chinese face in a system font collection; egui already uses it.
+# The system's fonts, for the CJK languages in a build without craft-fonts' faces (build.rs) and
+# for characters no embedded face has. Already in the build through craft-ui.
+egui_system_font_provider = "0.37"
+# Checking a hand-installed MiSans for a character; egui already uses it.
 skrifa = { version = "0.44", default-features = false, features = ["std"] }
 # The system time zone, so dates read as this computer's calendar; already in the desktop build.
 jiff = { workspace = true }
@@ -31,6 +37,10 @@ jiff = { workspace = true }
 js-sys = "0.3"
 wasm-bindgen = "0.2"
 
+[build-dependencies]
+# Cuts craft-fonts' Chinese and Japanese interface faces to the catalogs' characters (build.rs).
+craft-fonts-build = { workspace = true, features = ["subset"] }
+
 [dev-dependencies]
 # egui 0.37 no longer bundles its fallback faces by default; these tests install them
 # explicitly. Production also inherits `default_fonts` from eframe and the workspace's
@@ -39,3 +49,5 @@ egui = { workspace = true, features = ["default_fonts"] }
 serde_json = { workspace = true }
 egui_kittest = { workspace = true, features = ["wgpu", "snapshot"] }
 image = { version = "0.25", default-features = false, features = ["png", "jpeg"] }
+# Real fonts for the Fonts page's fake font store: egui's Ubuntu Light.
+epaint_default_fonts = "0.37"

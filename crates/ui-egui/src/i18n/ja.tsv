@@ -18,8 +18,8 @@
 # Shortcut keys keep their key-cap names (Shift, Alt, Ctrl, Cmd, Esc).
 # Trailing "…" (U+2026) must be preserved. Placeholders {name}, {n}, {version}, {count}, {v},
 # {what}, {unit}, {real}, {e} must appear in translation.
-# Japanese has one plural form. Shown with the system's Japanese font (see cjk_font.rs); where the
-# system has none, the interface stays in English.
+# Japanese has one plural form. Shown with craft-fonts' Japanese interface face or the system's
+# Japanese font (see theme.rs); where neither is there, the interface stays in English.
 
 	Launcher	Launcher
 	Craft App Suite	Craft App Suite
@@ -384,3 +384,11 @@ filter	Installed	インストール済み
 	Show {n} more changes	さらに{n}件の変更を表示
 	Last updated: {date}	最終更新: {date}
 column	Version	バージョン
+# The page toggle (Apps, Fonts), the Fonts page and its download switch in Settings.
+	Fonts	フォント
+	Allow font downloads	フォントのダウンロードを許可
+	Couldn't change the font download setting: {e}	フォントのダウンロード設定を変更できませんでした: {e}
+	Fonts download from their sources only when you install or preview one. Every Craft app shares this setting.	フォントは、インストールまたはプレビューするときにだけ、そのソースからダウンロードされます。この設定はすべての Craft アプリで共通です。
+	Sources	ソース
+	Apps	アプリ
+	Fonts for every Craft app	すべての Craft アプリで使えるフォント

@@ -122,6 +122,27 @@ pub struct Settings {
     pub tray_hint_shown: bool,
     /// How many times each app was opened from the launcher (catalog id → count), for "Frequently used".
     pub launches: BTreeMap<String, u32>,
+    /// The Fonts page's sample text and size.
+    pub fonts: FontSettings,
+}
+
+/// What the Fonts page keeps between runs.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct FontSettings {
+    /// The sample text; empty for the preset.
+    pub sample: String,
+    /// `sentence`, `alphabet` or `numerals`.
+    pub preset: String,
+    pub size: u16,
+    /// The note that font downloads are off was closed.
+    pub hide_download_note: bool,
+}
+
+impl Default for FontSettings {
+    fn default() -> Self {
+        FontSettings { sample: String::new(), preset: "sentence".into(), size: 36, hide_download_note: false }
+    }
 }
 
 impl Settings {
@@ -137,9 +158,9 @@ impl Settings {
 
     /// Display name for a language `code`: a language's name in itself, from the registry
     /// ([`LANGUAGES`](crate::i18n::LANGUAGES)). A language needing a CJK font is named in English,
-    /// with its own name added only while `installed` — the CJK face in the current font stack — is
-    /// that language (no other face draws it); "Auto" for `auto` and unknown codes, like
-    /// [`Lang::from_pref`](crate::i18n::Lang::from_pref).
+    /// with its own name added only while `installed` — the CJK language the font stack was built
+    /// for — is that language, whose font the system is known to have; "Auto" for `auto` and
+    /// unknown codes, like [`Lang::from_pref`](crate::i18n::Lang::from_pref).
     pub fn language_label(code: &str, installed: Option<crate::i18n::Lang>) -> String {
         match crate::i18n::Lang::from_code(code) {
             Some(lang) if lang.needs_cjk_font() && installed == Some(lang) => format!("{} ({})", lang.english_name(), lang.name()),
@@ -204,6 +225,7 @@ impl Default for Settings {
             hidden: std::collections::BTreeSet::new(),
             tray_hint_shown: false,
             launches: BTreeMap::new(),
+            fonts: FontSettings::default(),
         }
     }
 }

@@ -87,7 +87,12 @@ you when an update is out. It is a small native app that can sit in your menu ba
   </tr>
 </table>
 
-The web version shows the same catalog in the browser, with the latest download for each app.
+The **Fonts** page is Craft Font Manager: browse the Google Fonts and Noto collections (and index
+URLs you add), preview families in their own faces, and install them into the font store every Craft
+app reads. Nothing downloads until you allow font downloads in Settings or confirm an install.
+
+The web version shows the same catalog in the browser, with the latest download for each app; the
+Fonts page is desktop only.
 
 ## Interface languages
 
@@ -104,10 +109,12 @@ Chinese locales (`zh-CN`, `zh-SG`, `zh-Hans`, and POSIX forms such as `zh_CN.UTF
 Chinese; Traditional Chinese ones don't. To try a language without changing the setting, start the
 desktop app with `ARTCRAFT_LAUNCHER_LOCALE=pt-BR`, or add `?lang=ru` to the web address.
 
-The CJK languages are drawn with the system's own CJK font (Hiragino Sans or PingFang on macOS,
-Yu Gothic, Meiryo or Microsoft YaHei on Windows, Noto Sans CJK, IPA, Takao or WenQuanYi on Linux and
-FreeBSD). Where the system has no font for one, and in the web version, the interface stays in
-English and Settings says why. Product names and release notes stay as published; text without a
+The CJK languages are drawn with craft-fonts' interface faces (Noto Sans SC UI, BIZ UDPGothic),
+cut at build time to the characters the catalogs use (about 0.4 MB each). A desktop build gets them
+when `CRAFT_FONTS_DIR` names a [craft-fonts](https://github.com/storytold/craft-fonts) checkout;
+without one it uses the system's own CJK fonts, found through the system's font fallback
+(CoreText, DirectWrite, fontconfig), and for Chinese a MiSans installed by hand. Where neither has a font for one, and in the web version, the
+interface stays in English and Settings says why. Product names and release notes stay as published; text without a
 translation falls back to English.
 
 ## Where apps are installed
@@ -190,13 +197,14 @@ artcraft-launcher
 
 ## Build from source
 
-You need a recent stable Rust (1.90 or newer). On Linux, install the windowing headers first
+You need a recent stable Rust (1.95 or newer). On Linux, install the windowing headers first
 (Debian/Ubuntu: `sudo apt install libxkbcommon-dev libwayland-dev libx11-dev libxrandr-dev libxi-dev libgl1-mesa-dev`).
 
 ```sh
 git clone https://github.com/storytold/craft-launcher
 cd craft-launcher
 cargo run --release -p artcraft-launcher   # the desktop app
+CRAFT_FONTS_DIR=/path/to/craft-fonts cargo run --release -p artcraft-launcher   # with the CJK faces
 cargo xtask ci                             # fmt, clippy, tests and the wasm check
 ```
 

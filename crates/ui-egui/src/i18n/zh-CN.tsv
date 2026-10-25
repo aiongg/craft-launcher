@@ -2,7 +2,7 @@
 # Format: context<TAB>English source<TAB>translation.
 # Original translations from the English UI. Product and app names (ArtCraft Launcher and its
 # "Launcher" tag, Craft App Suite, PhotoCraft…) and third-party names stay unchanged.
-# Shown with the system's Chinese font (PingFang, Microsoft YaHei, Noto Sans CJK…): see cjk_font.rs.
+# Shown with craft-fonts' Chinese interface face, or the system's Chinese font: see theme.rs.
 # Chinese has one plural form. Placeholders and trailing ellipses are preserved.
 
 	Launcher	Launcher
@@ -349,3 +349,11 @@ figcraft	Interface design and prototyping	界面设计与原型制作
 	Show {n} more changes	显示另外 {n} 项更改
 	Last updated: {date}	最后更新：{date}
 column	Version	版本
+# The page toggle (Apps, Fonts), the Fonts page and its download switch in Settings.
+	Fonts	字体
+	Allow font downloads	允许下载字体
+	Couldn't change the font download setting: {e}	无法更改字体下载设置：{e}
+	Fonts download from their sources only when you install or preview one. Every Craft app shares this setting.	仅在您安装或预览字体时，才会从其来源下载字体。所有 Craft 应用共用此设置。
+	Sources	来源
+	Apps	应用
+	Fonts for every Craft app	适用于所有 Craft 应用的字体

@@ -94,8 +94,10 @@ means adding its row to every catalog marked `complete_menus` (the `*.tsv` files
 `crates/ui-egui/src/i18n/`), which the i18n tests check. Translate clean-room from the meaning of
 the English text, never through another catalog. Product and app names (ArtCraft Launcher, Craft
 App Suite, PhotoCraft…) stay in English.
-A CJK language is drawn with the system's own CJK font (`crates/ui-egui/src/cjk_font.rs`, desktop
-only; English where there is none): never bundle a CJK font, they are 10 MB and more.
+A CJK language is drawn with craft-fonts' interface face for it, which `crates/ui-egui/build.rs`
+cuts to the characters the catalogs use when `CRAFT_FONTS_DIR` is set, or else with the system's own
+CJK font (desktop only; English where there is none). Never bundle a whole CJK font: they are 10 MB
+and more.
 
 ### Other rules
 

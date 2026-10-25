@@ -28,6 +28,18 @@ next to them.
 | (dependency) `epaint_default_fonts/fonts/Ubuntu-Light.ttf` | Ubuntu Light, default font fallback | Canonical Ltd. | [Pinned egui source](https://github.com/storytold/egui/tree/6d518fc799681571963842f95b55a6b68431b15a/crates/epaint_default_fonts/fonts) | Ubuntu Font Licence 1.0; full upstream text and copyright in `NOTICE` |
 | (dependency) `epaint_default_fonts/fonts/Hack-Regular.ttf` | Hack Regular, default monospace fallback | Source Foundry Authors; Bitstream Inc.; DejaVu contributors | [Pinned egui source](https://github.com/storytold/egui/tree/6d518fc799681571963842f95b55a6b68431b15a/crates/epaint_default_fonts/fonts) | MIT and Bitstream Vera License; DejaVu work public domain; full upstream notices in `NOTICE` |
 
+### Fonts embedded from craft-fonts
+
+A build with `CRAFT_FONTS_DIR` set to a [craft-fonts](https://github.com/storytold/craft-fonts)
+checkout embeds these faces in the desktop app, cut to the characters of the translation catalogs
+(`crates/ui-egui/build.rs`). They are not stored in this repository; craft-fonts keeps each face's
+source and license file. The web build embeds none.
+
+| Face | Title | Author | Source | License |
+|---|---|---|---|---|
+| Noto Sans SC UI Regular (craft-fonts `fonts/ui/NotoSansSCUI-Regular.ttf`) | Simplified Chinese interface text | Google and Adobe (Noto CJK) | <https://github.com/notofonts/noto-cjk/tree/f8d157532fbfaeda587e826d4cd5b21a49186f7c/Sans/SubsetOTF/SC>, by way of craft-fonts | SIL OFL 1.1, craft-fonts `fonts/ui/OFL.txt` |
+| BIZ UDPGothic Regular (craft-fonts `fonts/biz-ud-pgothic/BIZUDPGothic-Regular.ttf`) | Japanese interface text | The BIZ UDGothic Project Authors (Morisawa Inc.) | <https://github.com/googlefonts/morisawa-biz-ud-gothic/tree/18934af56b9c003ca58c54bffbf226848cb11032>, by way of craft-fonts | SIL OFL 1.1, craft-fonts `fonts/biz-ud-pgothic/OFL.txt` |
+
 ### Craft App Suite icons
 
 The launcher shows each Craft app with that app's own icon. They are copied unmodified from each
