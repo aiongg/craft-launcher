@@ -111,6 +111,10 @@ fn main() -> ExitCode {
     {
         let theme_waker = waker.clone();
         launcher.appearance = craft_platform::appearance::Watcher::start(move || theme_waker.wake());
+        // Wait briefly for the desktop's answer so a light desktop doesn't open dark.
+        if let Some(watcher) = &launcher.appearance {
+            let _ = watcher.wait_first(std::time::Duration::from_millis(250));
+        }
     }
     // Started hidden at login where a window can't hide: start in the tray without mapping one,
     // so no window flashes up. Without a tray to come back from, the window opens after all.

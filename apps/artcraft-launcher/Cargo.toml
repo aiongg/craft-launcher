@@ -30,7 +30,7 @@ notify-rust = "4"
 # Cargo.lock through eframe's "persistence" feature.
 ron = "0.12.2"
 serde = { workspace = true }
-craft-quit = { version = "0.1.0", git = "https://github.com/storytold/craft-libs", rev = "92d392cff132eaf53e13afff77f38b5c11b73aa0", features = ["egui"] }
+craft-quit = { version = "0.1.0", git = "https://github.com/aiongg/craft-libs", rev = "6c123fe14a54142edb2b078dcaba0aae9e693d89", features = ["egui"] }
 
 # The tray (menu bar) icon. On Linux and the BSDs the StatusNotifierItem backend talks D-Bus
 # directly, so no GTK or libappindicator is needed.
