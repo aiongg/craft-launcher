@@ -1,10 +1,11 @@
 //! The Fonts page: Craft Font Manager beside the apps in the toolbar's page toggle, and its
-//! download switch in Settings. The page runs against the bundled Google Fonts index, a font
-//! folder made per test (the launcher's own Inter, Archivo and Geist Mono, and egui's Ubuntu
-//! Light, as installed fonts) and a fake font store. `ARTCRAFT_LAUNCHER_SNAPSHOTS=<dir>` also
-//! saves screenshots; `ARTCRAFT_LAUNCHER_SNAPSHOT_FONTS=<dir>` adds the fonts in that folder to the
-//! installed ones, and `ARTCRAFT_LAUNCHER_SNAPSHOT_GOOGLE_FONTS=<google/fonts checkout>` has the
-//! fake store "download" real files from it.
+//! download switch and preview server in Settings. The page runs against the bundled Google Fonts
+//! index, a font folder made per test (the launcher's own Inter, Archivo and Geist Mono, and
+//! egui's Ubuntu Light, as installed fonts) and a fake font store.
+//! `ARTCRAFT_LAUNCHER_SNAPSHOTS=<dir>` also saves screenshots; `ARTCRAFT_LAUNCHER_SNAPSHOT_FONTS=<dir>`
+//! adds the fonts in that folder to the installed ones, and
+//! `ARTCRAFT_LAUNCHER_SNAPSHOT_GOOGLE_FONTS=<google/fonts checkout>` has the fake store "download"
+//! real files from it.
 #![cfg(not(target_arch = "wasm32"))]
 
 use std::collections::HashMap;
@@ -104,24 +105,30 @@ fn launcher(name: &str, language: &str, runner: Runner) -> (Harness<'static, Opt
     let mut options = Some(Options { catalog, installer: store.clone(), index, runner });
     artcraft_launcher_ui_egui::i18n::set_test_lang(artcraft_launcher_ui_egui::i18n::Lang::EN);
     let settings = Settings { notify: false, language: language.into(), ..Settings::default() };
-    let harness = Harness::builder().with_size(egui::vec2(1120.0, 760.0)).with_theme(egui::Theme::Dark).build_ui_state(
-        move |ui, state: &mut Option<LauncherUi>| {
-            if state.is_none() {
-                let mut s = settings.clone();
-                s.theme = artcraft_launcher_ui_egui::theme::ThemeChoice::Dark;
-                let mut launcher = LauncherUi::new(ui.ctx(), Box::new(Quiet), s);
-                if let Some(options) = options.take() {
-                    launcher.use_font_options(options);
+    let harness = Harness::builder()
+        .with_size(egui::vec2(1120.0, 760.0))
+        .with_theme(egui::Theme::Dark)
+        // The index's samples cover every script (Korean, Thai…), and the cards draw them before
+        // their faces load; the test's fonts don't cover them all.
+        .allow_missing_glyphs()
+        .build_ui_state(
+            move |ui, state: &mut Option<LauncherUi>| {
+                if state.is_none() {
+                    let mut s = settings.clone();
+                    s.theme = artcraft_launcher_ui_egui::theme::ThemeChoice::Dark;
+                    let mut launcher = LauncherUi::new(ui.ctx(), Box::new(Quiet), s);
+                    if let Some(options) = options.take() {
+                        launcher.use_font_options(options);
+                    }
+                    *state = Some(launcher);
                 }
-                *state = Some(launcher);
-            }
-            if let Some(l) = state.as_mut() {
-                l.logic(&ui.ctx().clone(), &mut NoHost);
-                l.ui(ui, &mut NoHost);
-            }
-        },
-        None,
-    );
+                if let Some(l) = state.as_mut() {
+                    l.logic(&ui.ctx().clone(), &mut NoHost);
+                    l.ui(ui, &mut NoHost);
+                }
+            },
+            None,
+        );
     (harness, store)
 }
 
@@ -201,6 +208,42 @@ fn sources_are_added_in_settings() {
     add_source(&mut h);
     assert_eq!(results(&h).len(), before + 1);
     assert!(h.query_all_by_label("Not curated").next().is_some());
+}
+
+#[test]
+fn the_preview_server_is_set_in_settings() {
+    // The environment variable takes precedence and makes the field read-only.
+    if std::env::var("CRAFT_FONT_PREVIEW_URL").is_ok_and(|v| !v.trim().is_empty()) {
+        return;
+    }
+    let (mut h, store) = launcher("preview-server", "en", Runner::Inline);
+    let service = || craft_font_manager::store::Installer::preview_service(&*store);
+    let refused = |h: &Harness<'_, Option<LauncherUi>>| {
+        h.query_all(By::new().predicate(|n| n.value().or(n.label()).is_some_and(|l| l.contains("Couldn't use this server")))).next().is_some()
+    };
+    settle(&mut h);
+    click(&mut h, "Settings");
+    assert_eq!(service(), None, "no server by default");
+
+    let field = "Font preview server";
+    h.get_by_role_and_label(Role::TextInput, field).focus();
+    h.step();
+    h.get_by_role_and_label(Role::TextInput, field).type_text("http://192.0.2.1/");
+    h.step();
+    h.key_press(egui::Key::Enter);
+    settle(&mut h);
+    assert_eq!(service(), None, "plain http only to this computer");
+    assert!(refused(&h));
+
+    h.get_by_role_and_label(Role::TextInput, field).focus();
+    h.step();
+    h.key_press_modifiers(egui::Modifiers::COMMAND, egui::Key::A);
+    h.get_by_role_and_label(Role::TextInput, field).type_text("http://127.0.0.1:9/");
+    h.step();
+    h.key_press(egui::Key::Enter);
+    settle(&mut h);
+    assert_eq!(service().as_deref(), Some("http://127.0.0.1:9"));
+    assert!(!refused(&h));
 }
 
 /// Types the example source into Settings and adds it, then waits for its index.
