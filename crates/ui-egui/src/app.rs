@@ -9,31 +9,40 @@ use artcraft_launcher_core::release::Release;
 use artcraft_launcher_core::status::AppStatus;
 use artcraft_launcher_core::{Platform, SUITE};
 
+use craft_ui::title_bar::Frame;
+use craft_window::policy::{Decision, Desktop, DesktopKind};
+
 use crate::i18n::set_current;
 use crate::model::AppEntry;
 use crate::motion;
 use crate::settings::{Filter, Settings, SortKey, ViewMode};
 use crate::theme::{self, Tokens};
 
-/// Who draws the window's title bar.
+/// Whether the "Use system title bar" setting is offered, and when it takes effect.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
-pub enum TitleBar {
-    /// Nothing to draw: the OS draws one, or there's no window (the web build).
+pub enum SystemTitleBar {
+    /// Not offered: tiling compositors, an environment override, the web build.
     #[default]
-    Native,
-    /// The window has no OS title bar: the header is the title bar (drag it to move the window,
-    /// double-click to maximize), with minimize, maximize and close at its right end, and the
-    /// window's edges resize it.
-    Custom,
-    /// macOS: the header runs under a transparent title bar, with the traffic lights at its left.
-    MacOs,
+    Hidden,
+    /// Applied at once (Windows, Linux).
+    Live,
+    /// Applied at the next start (macOS).
+    NextLaunch,
 }
 
 /// What only the shell can do. Every method has a do-nothing default (the web build).
 pub trait Host {
-    /// Who draws the title bar.
-    fn title_bar(&self) -> TitleBar {
-        TitleBar::Native
+    /// Who draws the title bar. `system` is the "Use system title bar" setting.
+    fn title_bar(&self, _system: bool) -> Decision {
+        Decision {
+            frame: Frame::Native,
+            overridden: None,
+            desktop: Desktop { kind: DesktopKind::Other, ssd: None, gtk_theme: None, icon_theme: None },
+        }
+    }
+    /// Whether the "Use system title bar" setting is offered.
+    fn system_title_bar(&self) -> SystemTitleBar {
+        SystemTitleBar::Hidden
     }
     /// Shows a system notification.
     fn notify(&mut self, _title: &str, _body: &str) {}
@@ -167,6 +176,8 @@ pub struct LauncherUi {
     motion_recheck: f64,
     /// What the context's styles were last set for.
     applied_motion: Option<bool>,
+    /// Whether the window has the OS's decorations, as last told to the window.
+    decorated: Option<bool>,
     /// Fonts registered with `set_fonts` only exist from the next frame on; drawing with the named
     /// weights before then would abort.
     fonts_ready: bool,
@@ -260,6 +271,7 @@ impl LauncherUi {
             reduce_motion: false,
             motion_recheck: 0.0,
             applied_motion: None,
+            decorated: None,
             fonts_ready: false,
             cjk_font,
             sent_options: None,
@@ -730,11 +742,23 @@ impl LauncherUi {
         }
     }
 
+    /// Turns the OS's decorations on or off when the setting changes the frame while the window
+    /// is open; the first call only records the state the window was created in.
+    fn sync_decorations(&mut self, ctx: &egui::Context, frame: &Frame) {
+        let decorated = !matches!(frame, Frame::Integrated(_));
+        if self.decorated.is_some_and(|d| d != decorated) {
+            ctx.send_viewport_cmd(egui::ViewportCommand::Decorations(decorated));
+        }
+        self.decorated = Some(decorated);
+    }
+
     /// Draws the launcher.
     pub fn ui(&mut self, ui: &mut egui::Ui, host: &mut dyn Host) {
         let ctx = ui.ctx().clone();
         self.begin_ui_frame(&ctx);
-        if host.title_bar() == TitleBar::MacOs && ctx.input_mut(|i| i.consume_key(egui::Modifiers::MAC_CMD, egui::Key::M)) {
+        let frame = host.title_bar(self.settings.system_title_bar).frame;
+        self.sync_decorations(&ctx, &frame);
+        if matches!(frame, Frame::Inset(_)) && ctx.input_mut(|i| i.consume_key(egui::Modifiers::MAC_CMD, egui::Key::M)) {
             ctx.send_viewport_cmd(egui::ViewportCommand::Minimized(true));
         }
         // `effective_lang` only picks a CJK language once the system's font has loaded; install
@@ -781,7 +805,7 @@ impl LauncherUi {
             .frame(egui::Frame::new().fill(tokens.bg))
             .exact_size(crate::views::HEADER_H)
             .resizable(false)
-            .show(ui, |ui| self.header(ui, host.title_bar()));
+            .show(ui, |ui| self.header(ui, &frame));
         egui::Panel::bottom("footer")
             .frame(egui::Frame::new().fill(tokens.bg).inner_margin(egui::Margin::symmetric(20, 0)))
             .exact_size(crate::views::FOOTER_H)
@@ -817,8 +841,8 @@ impl LauncherUi {
         self.dialogs(&ctx, host);
         self.flush_actions();
         self.draw_toasts(&ctx);
-        if host.title_bar() == TitleBar::Custom {
-            crate::widgets::window_edges(&ctx);
+        if matches!(frame, Frame::Integrated(_)) {
+            crate::widgets::window_border(&ctx);
         }
     }
 

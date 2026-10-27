@@ -184,6 +184,8 @@ pub struct Settings {
     pub tray_hint_shown: bool,
     /// How many times each app was opened from the launcher (catalog id → count), for "Frequently used".
     pub launches: BTreeMap<String, u32>,
+    /// "Use system title bar": the OS draws the title bar instead of the launcher's header.
+    pub system_title_bar: bool,
 }
 
 impl Settings {
@@ -279,6 +281,7 @@ impl Default for Settings {
             hidden: std::collections::BTreeSet::new(),
             tray_hint_shown: false,
             launches: BTreeMap::new(),
+            system_title_bar: false,
         }
     }
 }

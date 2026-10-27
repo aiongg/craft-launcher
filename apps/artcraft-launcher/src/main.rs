@@ -22,7 +22,9 @@ use std::time::Duration;
 use artcraft_launcher_core::protocol::Backend;
 use artcraft_launcher_native::single_instance::{self, Instance};
 use artcraft_launcher_native::{NativeBackend, login};
-use artcraft_launcher_ui_egui::{Host, LauncherUi, Settings, TitleBar};
+use artcraft_launcher_ui_egui::{Host, LauncherUi, Settings, SystemTitleBar};
+use craft_window::Prefix;
+use craft_window::policy::{Backend as WindowBackend, Decision, DesktopKind, Frame, Os, TitleBarPref};
 use eframe::wgpu::rwh::{HasDisplayHandle, RawDisplayHandle};
 
 const APP_ID: &str = "ai.storyteller.artcraft-launcher";
@@ -131,10 +133,15 @@ fn main() -> ExitCode {
     loop {
         if window {
             let result = {
+                let system_bar = if launcher.started {
+                    launcher.ui.settings.system_title_bar
+                } else {
+                    settings_path.as_deref().and_then(|p| settings_file::load::<Settings>(p, SETTINGS_KEY)).is_some_and(|s| s.system_title_bar)
+                };
                 let (waker, launcher) = (waker.clone(), &mut launcher);
                 eframe::run_native(
                     "ArtCraft Launcher",
-                    native_options(hidden),
+                    native_options(hidden, system_bar),
                     Box::new(move |cc| {
                         launcher.open(cc, &waker);
                         Ok(Box::new(Shell::new(cc, launcher, hidden)))
@@ -158,13 +165,38 @@ fn main() -> ExitCode {
     }
 }
 
+/// Whether the current window was created with the OS's title bar. macOS cannot switch an open
+/// window between the full-size content view and the OS's bar, so there it stays as created.
+static CREATED_WITH_SYSTEM_BAR: AtomicBool = AtomicBool::new(false);
+
+/// The frame policy for the Integrated preference, read from the platform once.
+fn integrated_decision() -> &'static Decision {
+    static DECISION: OnceLock<Decision> = OnceLock::new();
+    DECISION.get_or_init(|| craft_window::policy::decide_for(Prefix::new("ARTCRAFT_LAUNCHER"), WindowBackend::from_env(), TitleBarPref::Integrated))
+}
+
+/// The decided frame for the setting "Use system title bar" (`system_bar`). The
+/// `ARTCRAFT_LAUNCHER_TITLEBAR` / `CRAFT_TITLEBAR` override and tiling desktops decide on their own;
+/// on macOS the window keeps the frame it was created with.
+fn frame_decision(system_bar: bool) -> Decision {
+    let integrated = integrated_decision();
+    let system_bar = if integrated.overridden.is_some() || integrated.desktop.kind == DesktopKind::Tiling {
+        return integrated.clone();
+    } else if Os::current() == Os::Mac {
+        CREATED_WITH_SYSTEM_BAR.load(Ordering::Relaxed)
+    } else {
+        system_bar
+    };
+    if system_bar { Decision { frame: Frame::Native, ..integrated.clone() } } else { integrated.clone() }
+}
+
 /// The native window and renderer setup. `hidden` only sets the initial visibility; the shell
 /// shows the window after a tray start. Non-macOS windows are undecorated because the header
 /// draws the title bar, while macOS keeps its bundle icon and hides the system title. Window
 /// state persists to the portable-aware settings path, system font fallback is off so the
 /// deliberate bundled faces stay in charge, and wgpu limits are clamped to the adapter so a
 /// short adapter cannot fail device creation.
-fn native_options(hidden: bool) -> eframe::NativeOptions {
+fn native_options(hidden: bool, system_bar: bool) -> eframe::NativeOptions {
     let icon =
         eframe::icon_data::from_png_bytes(include_bytes!("../../../assets/app-icon/hicolor/256x256/apps/ai.storyteller.artcraft-launcher.png")).ok();
     let mut viewport = egui::ViewportBuilder::default()
@@ -173,12 +205,9 @@ fn native_options(hidden: bool) -> eframe::NativeOptions {
         .with_inner_size([1120.0, 760.0])
         .with_min_inner_size([720.0, 500.0])
         .with_visible(!hidden);
-    // The header is the title bar (see `DesktopHost::title_bar`).
-    viewport = if cfg!(target_os = "macos") {
-        viewport.with_fullsize_content_view(true).with_titlebar_shown(false).with_title_shown(false)
-    } else {
-        viewport.with_decorations(false)
-    };
+    // The header is the title bar unless the frame policy says otherwise (see `DesktopHost::title_bar`).
+    CREATED_WITH_SYSTEM_BAR.store(system_bar, Ordering::Relaxed);
+    viewport = craft_window::policy::apply(viewport, &frame_decision(system_bar).frame);
     // On macOS the bundle's .icns is the icon. Any icon given to eframe (its egui logo when none
     // is) replaces it in the Dock at runtime with a raw bitmap, which skips the system's icon
     // treatment, so pass the empty icon, which eframe takes as "leave it alone".
@@ -484,8 +513,19 @@ struct DesktopHost {
 }
 
 impl Host for DesktopHost {
-    fn title_bar(&self) -> TitleBar {
-        if cfg!(target_os = "macos") { TitleBar::MacOs } else { TitleBar::Custom }
+    fn title_bar(&self, system: bool) -> Decision {
+        frame_decision(system)
+    }
+
+    fn system_title_bar(&self) -> SystemTitleBar {
+        let d = integrated_decision();
+        if d.overridden.is_some() || d.desktop.kind == DesktopKind::Tiling {
+            SystemTitleBar::Hidden
+        } else if Os::current() == Os::Mac {
+            SystemTitleBar::NextLaunch
+        } else {
+            SystemTitleBar::Live
+        }
     }
 
     fn notify(&mut self, title: &str, body: &str) {
@@ -859,6 +899,9 @@ impl eframe::App for Shell<'_> {
         #[cfg(all(unix, not(target_os = "macos")))]
         if let Some(watcher) = &self.launcher.appearance {
             portal_system_theme(raw_input, watcher.current());
+        }
+        if matches!(self.launcher.host.title_bar(self.launcher.ui.settings.system_title_bar).frame, Frame::Integrated(_)) {
+            craft_ui::title_bar::release_after_os_resize(ctx, raw_input);
         }
         self.launcher.ui.raw_input(ctx, raw_input);
     }

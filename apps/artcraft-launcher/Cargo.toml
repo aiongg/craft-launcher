@@ -32,6 +32,8 @@ ron = "0.12.2"
 serde = { workspace = true }
 # The shared suite theme folder, watched for the UI.
 craft-theme-store = { workspace = true }
+craft-window = { workspace = true }
+craft-ui = { workspace = true }
 craft-quit = { version = "0.1.0", git = "https://github.com/aiongg/craft-libs", rev = "4cfec85ae602772807003a863fab1da24e04e80e", features = ["egui"] }
 
 # The tray (menu bar) icon. On Linux and the BSDs the StatusNotifierItem backend talks D-Bus

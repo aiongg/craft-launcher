@@ -8,12 +8,13 @@ use artcraft_launcher_core::status::AppStatus;
 use artcraft_launcher_core::time;
 use egui::{Color32, CornerRadius, FontId, Rect, RichText, Sense, Stroke, Ui, vec2};
 
-use crate::app::{Dialog, LauncherUi, TitleBar};
+use crate::app::{Dialog, LauncherUi};
 use crate::i18n::{current, fmt, t, tn, tr_ctx};
 use crate::model::{self, AppEntry};
 use crate::settings::{Filter, SortKey, ViewMode};
 use crate::theme::{self, Tokens, rgb, tint};
 use crate::widgets::{self, Kind};
+use craft_ui::title_bar::{CaptionLabels, Frame, TitleBar};
 
 /// Translate a relative timestamp ("just now", "5 min ago", …) into the current language.
 fn ago_text(secs: i64, now: i64) -> String {
@@ -59,41 +60,42 @@ const TAGLINE_SIZE: f32 = 12.0;
 /// The card's top strip: number tab and links.
 const STRIP_H: f32 = 40.0;
 const CARD_PAD: f32 = 20.0;
-/// Room macOS's traffic lights take at the left of the header.
-const TRAFFIC_LIGHTS_W: f32 = 72.0;
-
 impl LauncherUi {
-    /// The header bar; with a custom or macOS title bar it is also the window's title bar.
-    pub(crate) fn header(&mut self, ui: &mut Ui, bar: TitleBar) {
+    /// The header bar; with an inset or integrated frame it is also the window's title bar.
+    pub(crate) fn header(&mut self, ui: &mut Ui, frame: &Frame) {
         let t = Tokens::get(ui.ctx());
-        let h = HEADER_H;
-        if bar != TitleBar::Native {
-            widgets::title_bar_drag(ui);
+        let labels = CaptionLabels {
+            minimize: tl!("Minimize").into(),
+            maximize: tl!("Maximize").into(),
+            restore: tl!("Restore").into(),
+            close: tl!("Close").into(),
+        };
+        let bar = TitleBar::new(frame, HEADER_H, theme::caption_colors(ui.ctx())).labels(&labels).show(ui, |ui, _| self.header_content(ui, &t));
+        if bar.close_requested {
+            ui.ctx().send_viewport_cmd(egui::ViewportCommand::Close);
         }
-        ui.horizontal(|ui| {
-            ui.spacing_mut().item_spacing.x = 0.0;
-            if bar == TitleBar::MacOs {
-                ui.add_space(TRAFFIC_LIGHTS_W);
+    }
+
+    /// The wordmark, the Craft App Suite label and the Settings button, between the title bar's
+    /// leading inset and its caption buttons.
+    fn header_content(&mut self, ui: &mut Ui, t: &Tokens) {
+        let h = HEADER_H;
+        ui.spacing_mut().item_spacing.x = 0.0;
+        // The ArtCraft wordmark exactly as supplied, in its own cell.
+        let logo = vec2(14.0 * crate::icons::ARTCRAFT_LOGO_ASPECT, 14.0);
+        let (cell, _) = ui.allocate_exact_size(vec2(logo.x + 40.0, h), Sense::hover());
+        egui::Image::new(crate::icons::artcraft_logo(t.dark)).alt_text(tl!("ArtCraft")).paint_at(ui, Rect::from_center_size(cell.center(), logo));
+        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+            if widgets::nav_icon(ui, widgets::Glyph::Settings, tl!("Settings"), h, false).clicked() {
+                self.dialog = Some(Dialog::Settings);
             }
-            // The ArtCraft wordmark exactly as supplied, in its own cell.
-            let logo = vec2(14.0 * crate::icons::ARTCRAFT_LOGO_ASPECT, 14.0);
-            let (cell, _) = ui.allocate_exact_size(vec2(logo.x + 40.0, h), Sense::hover());
-            egui::Image::new(crate::icons::artcraft_logo(t.dark)).alt_text(tl!("ArtCraft")).paint_at(ui, Rect::from_center_size(cell.center(), logo));
-            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                if bar == TitleBar::Custom {
-                    widgets::window_buttons(ui, h);
+            // The controls reserve their actual widths before the secondary text gets space.
+            ui.with_layout(egui::Layout::left_to_right(egui::Align::Center), |ui| {
+                if ui.available_width() >= 17.0 + widgets::hud_galley(ui, tl!("Craft App Suite"), t.muted).size().x {
+                    widgets::rule(ui, h);
+                    ui.add_space(16.0);
+                    widgets::hud(ui, tl!("Craft App Suite"), t.muted);
                 }
-                if widgets::nav_icon(ui, widgets::Glyph::Settings, tl!("Settings"), h, false).clicked() {
-                    self.dialog = Some(Dialog::Settings);
-                }
-                // The controls reserve their actual widths before the secondary text gets space.
-                ui.with_layout(egui::Layout::left_to_right(egui::Align::Center), |ui| {
-                    if ui.available_width() >= 17.0 + widgets::hud_galley(ui, tl!("Craft App Suite"), t.muted).size().x {
-                        widgets::rule(ui, h);
-                        ui.add_space(16.0);
-                        widgets::hud(ui, tl!("Craft App Suite"), t.muted);
-                    }
-                });
             });
         });
     }

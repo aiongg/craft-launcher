@@ -215,7 +215,7 @@ fn harness_with(
     manage: bool,
     scale: f32,
 ) -> (Harness<'static, Option<LauncherUi>>, Rc<RefCell<Vec<Command>>>) {
-    harness_full(events, view, theme, manage, scale, artcraft_launcher_ui_egui::TitleBar::Native, Rc::default(), None, None)
+    harness_full(events, view, theme, manage, scale, Bar::Native, Rc::default(), None, None)
 }
 
 /// Like `harness_with`, with the details pictures answered as `pictures` says (changeable during the test).
@@ -227,7 +227,27 @@ fn harness_pictures(
     scale: f32,
     pictures: Rc<Cell<Pictures>>,
 ) -> (Harness<'static, Option<LauncherUi>>, Rc<RefCell<Vec<Command>>>) {
-    harness_full(events, view, theme, manage, scale, artcraft_launcher_ui_egui::TitleBar::Native, pictures, None, None)
+    harness_full(events, view, theme, manage, scale, Bar::Native, pictures, None, None)
+}
+
+/// The frames the title-bar tests drive the header with.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum Bar {
+    Native,
+    MacOs,
+    Custom,
+}
+
+impl Bar {
+    fn decision(self) -> craft_window::policy::Decision {
+        use craft_window::policy::{CaptionFamily, Captions, Decision, Desktop, DesktopKind, Frame, MacInset};
+        let frame = match self {
+            Bar::Native => Frame::Native,
+            Bar::MacOs => Frame::Inset(MacInset::default()),
+            Bar::Custom => Frame::Integrated(Captions { family: CaptionFamily::Windows, layout: craft_window::Layout::default() }),
+        };
+        Decision { frame, overridden: None, desktop: Desktop { kind: DesktopKind::Other, ssd: None, gtk_theme: None, icon_theme: None } }
+    }
 }
 
 fn harness_with_title_bar(
@@ -236,23 +256,13 @@ fn harness_with_title_bar(
     theme: egui::Theme,
     manage: bool,
     scale: f32,
-    bar: artcraft_launcher_ui_egui::TitleBar,
+    bar: Bar,
 ) -> (Harness<'static, Option<LauncherUi>>, Rc<RefCell<Vec<Command>>>) {
     harness_full(events, view, theme, manage, scale, bar, Rc::default(), None, None)
 }
 
 fn harness_with_discord(discord_url: Option<&'static str>) -> (Harness<'static, Option<LauncherUi>>, Rc<RefCell<Vec<Command>>>) {
-    harness_full(
-        events(),
-        ViewMode::Grid,
-        egui::Theme::Dark,
-        true,
-        1.0,
-        artcraft_launcher_ui_egui::TitleBar::Native,
-        Rc::default(),
-        None,
-        discord_url,
-    )
+    harness_full(events(), ViewMode::Grid, egui::Theme::Dark, true, 1.0, Bar::Native, Rc::default(), None, discord_url)
 }
 
 #[allow(clippy::too_many_arguments)] // Test fixture inputs vary independently across existing cases.
@@ -265,15 +275,15 @@ fn harness_full(
     theme: egui::Theme,
     manage: bool,
     scale: f32,
-    bar: artcraft_launcher_ui_egui::TitleBar,
+    bar: Bar,
     pictures: Rc<Cell<Pictures>>,
     platform: Option<Platform>,
     discord_url: Option<&'static str>,
 ) -> (Harness<'static, Option<LauncherUi>>, Rc<RefCell<Vec<Command>>>) {
-    struct HeaderHost(artcraft_launcher_ui_egui::TitleBar, Option<&'static str>);
+    struct HeaderHost(Bar, Option<&'static str>);
     impl Host for HeaderHost {
-        fn title_bar(&self) -> artcraft_launcher_ui_egui::TitleBar {
-            self.0
+        fn title_bar(&self, _system: bool) -> craft_window::policy::Decision {
+            self.0.decision()
         }
         fn discord_url(&self) -> &'static str {
             self.1.unwrap_or(artcraft_launcher_core::catalog::DISCORD_URL)
@@ -463,7 +473,7 @@ fn windows_package_choice_can_select_portable_and_configures_the_backend() {
         egui::Theme::Light,
         true,
         1.0,
-        artcraft_launcher_ui_egui::TitleBar::Native,
+        Bar::Native,
         Rc::default(),
         Some(Platform { os: Os::Windows, arch: Arch::X64 }),
         None,
@@ -494,7 +504,7 @@ fn a_narrow_settings_row_keeps_its_control_clear_of_its_label() {
         egui::Theme::Light,
         true,
         1.0,
-        artcraft_launcher_ui_egui::TitleBar::Native,
+        Bar::Native,
         Rc::default(),
         Some(Platform { os: Os::Windows, arch: Arch::X64 }),
         None,
@@ -1662,8 +1672,8 @@ fn web_build_offers_downloads() {
 fn custom_title_bar_has_window_buttons() {
     struct FramelessHost;
     impl Host for FramelessHost {
-        fn title_bar(&self) -> artcraft_launcher_ui_egui::TitleBar {
-            artcraft_launcher_ui_egui::TitleBar::Custom
+        fn title_bar(&self, _system: bool) -> craft_window::policy::Decision {
+            Bar::Custom.decision()
         }
     }
     let mut backend = Some(Fake {
@@ -1698,11 +1708,11 @@ fn custom_title_bar_has_window_buttons() {
     assert!(closes, "the close button asks the window to close (the shell decides whether that hides it to the tray)");
 }
 
-/// Maximized, the window's top-right pixel is the screen's corner: there is no resize band there,
-/// so it belongs to the close button, as it does with Windows' own caption buttons (#374).
+/// The close button's top-right corner closes the window, maximized or not, while the window's top
+/// edge still resizes it.
 #[test]
-fn maximized_the_close_button_reaches_the_screens_corner() {
-    let (mut h, _) = harness_with_title_bar(events(), ViewMode::Grid, egui::Theme::Dark, true, 1.0, artcraft_launcher_ui_egui::TitleBar::Custom);
+fn the_close_button_reaches_its_corner_and_the_top_edge_still_resizes() {
+    let (mut h, _) = harness_with_title_bar(events(), ViewMode::Grid, egui::Theme::Dark, true, 1.0, Bar::Custom);
     h.run_steps(6);
     let set_maximized = |h: &mut Harness<'_, Option<LauncherUi>>, maximized: bool| {
         h.input_mut().viewports.entry(egui::ViewportId::ROOT).or_default().maximized = Some(maximized);
@@ -1720,23 +1730,29 @@ fn maximized_the_close_button_reaches_the_screens_corner() {
         }
         asked
     };
-    // Windowed, the clickable area stops short of the button's top-right corner by the resize
-    // band; maximized, it reaches it.
-    let windowed = h.get_by_label("Close").rect();
+    // The title bar keeps its resize zones off the caption buttons, so the button's own corner
+    // closes the window whether it is maximized or not (#374).
+    let close = h.get_by_label("Close").rect();
+    let corner = egui::pos2(close.right() - 0.5, close.top() + 0.5);
+    let asked = click(&mut h, corner);
+    assert!(asked.contains(&egui::ViewportCommand::Close), "windowed: {asked:?}");
     set_maximized(&mut h, true);
-    let maximized = h.get_by_label("Close").rect();
-    assert!(maximized.top() < windowed.top() && maximized.right() > windowed.right(), "windowed {windowed:?}, maximized {maximized:?}");
-    // The button's own corner stands in for the screen's: the harness keeps the app 8 px in from
-    // the window. Windowed, it is beyond the band and egui's click tolerance; maximized, it closes.
-    let corner = egui::pos2(maximized.right() - 0.5, maximized.top() + 0.5);
     let asked = click(&mut h, corner);
     assert!(asked.contains(&egui::ViewportCommand::Close), "maximized: {asked:?}");
     set_maximized(&mut h, false);
-    let asked = click(&mut h, corner);
-    assert!(!asked.contains(&egui::ViewportCommand::Close), "windowed: {asked:?}");
-    // And the window's own corner is still for resizing.
-    let asked = click(&mut h, egui::pos2(1180.0 - 0.5, 0.5));
-    assert!(asked.iter().any(|c| matches!(c, egui::ViewportCommand::BeginResize(_))), "{asked:?}");
+    // And the window's top edge beside the buttons is still for resizing: press and drag there.
+    let start = egui::pos2(600.0, 4.0);
+    let mut asked = Vec::new();
+    for event in [
+        egui::Event::PointerMoved(start),
+        egui::Event::PointerButton { pos: start, button: egui::PointerButton::Primary, pressed: true, modifiers: egui::Modifiers::NONE },
+        egui::Event::PointerMoved(start + egui::vec2(0.0, 6.0)),
+    ] {
+        h.input_mut().events.push(event);
+        h.step();
+        asked.extend(h.output().viewport_output.values().flat_map(|v| v.commands.iter().cloned()));
+    }
+    assert!(asked.iter().any(|c| matches!(c, egui::ViewportCommand::BeginResize(egui::viewport::ResizeDirection::North))), "{asked:?}");
 }
 
 #[test]
@@ -2139,7 +2155,7 @@ fn saved_filters_are_migrated_on_ui_construction() {
 /// Checks that, at one window width, every header control stays inside the window and clear of
 /// the brand text, that a custom title bar's buttons are there and inside, and snapshots the
 /// three widths that matter visually.
-fn assert_header_at_width(h: &mut Harness<'_, Option<LauncherUi>>, bar: artcraft_launcher_ui_egui::TitleBar, theme: egui::Theme, width: f32) {
+fn assert_header_at_width(h: &mut Harness<'_, Option<LauncherUi>>, bar: Bar, theme: egui::Theme, width: f32) {
     for label in ["Show apps as cards", "Show apps as a table", "Settings", "Check for updates"] {
         let rect = h.get_by_label(label).rect();
         assert!(rect.left() >= 0.0 && rect.right() <= width, "{bar:?} {width}: {label} {rect:?}");
@@ -2147,7 +2163,7 @@ fn assert_header_at_width(h: &mut Harness<'_, Option<LauncherUi>>, bar: artcraft
             assert!(!rect.intersects(text.rect()), "{bar:?} {width}: Craft App Suite overlaps {label} {rect:?}");
         }
     }
-    if bar == artcraft_launcher_ui_egui::TitleBar::Custom {
+    if bar == Bar::Custom {
         for label in ["Minimize", "Maximize", "Close"] {
             let rect = h.get_by_label(label).rect();
             assert!(rect.left() >= 0.0 && rect.right() <= width, "{width}: {label} {rect:?}");
@@ -2164,9 +2180,8 @@ fn assert_header_at_width(h: &mut Harness<'_, Option<LauncherUi>>, bar: artcraft
 
 #[test]
 fn narrow_header_keeps_the_view_switch_clear_of_brand_text() {
-    use artcraft_launcher_ui_egui::TitleBar;
     for theme in [egui::Theme::Dark, egui::Theme::Light] {
-        for bar in [TitleBar::Native, TitleBar::MacOs, TitleBar::Custom] {
+        for bar in [Bar::Native, Bar::MacOs, Bar::Custom] {
             let (mut h, _) = harness_with_title_bar(events(), ViewMode::Grid, theme, true, 1.0, bar);
             for width in (720..=1180).step_by(10).chain([720, 1180]).map(|w| w as f32) {
                 h.set_size(egui::vec2(width, 900.0));
@@ -2390,8 +2405,7 @@ fn changelog_shortcuts_zoom_only_the_notes_text() {
 
 #[test]
 fn command_m_minimizes_the_mac_window_only() {
-    use artcraft_launcher_ui_egui::TitleBar;
-    for bar in [TitleBar::MacOs, TitleBar::Native, TitleBar::Custom] {
+    for bar in [Bar::MacOs, Bar::Native, Bar::Custom] {
         let (mut h, _) = harness_with_title_bar(events(), ViewMode::Grid, egui::Theme::Dark, true, 1.0, bar);
         h.run_steps(4);
         h.input_mut().events.push(egui::Event::Key {
@@ -2403,7 +2417,7 @@ fn command_m_minimizes_the_mac_window_only() {
         });
         h.step();
         let minimized = h.output().viewport_output.values().any(|v| v.commands.iter().any(|c| matches!(c, egui::ViewportCommand::Minimized(true))));
-        assert_eq!(minimized, bar == TitleBar::MacOs, "{bar:?}");
+        assert_eq!(minimized, bar == Bar::MacOs, "{bar:?}");
     }
 }
 
@@ -2564,4 +2578,68 @@ fn settings_pick_the_launchers_own_theme_and_mode() {
     let tokens = artcraft_launcher_ui_egui::theme::Tokens::get(&h.ctx);
     assert!(!tokens.dark, "a fixed Light draws light in the dark slot");
     assert_eq!(tokens.bg, egui::Color32::from_rgb(0xf1, 0xf1, 0xf3), "Graphite's light background");
+}
+
+/// "Use system title bar" is offered only where the host says it changes something; switching it
+/// on gives the window its OS decorations at once.
+#[test]
+fn the_system_title_bar_setting_switches_the_frame_live() {
+    struct LiveHost;
+    impl Host for LiveHost {
+        fn title_bar(&self, system: bool) -> craft_window::policy::Decision {
+            if system { Bar::Native } else { Bar::Custom }.decision()
+        }
+        fn system_title_bar(&self) -> artcraft_launcher_ui_egui::SystemTitleBar {
+            artcraft_launcher_ui_egui::SystemTitleBar::Live
+        }
+    }
+    let run = |live: bool| {
+        artcraft_launcher_ui_egui::i18n::set_test_lang(artcraft_launcher_ui_egui::i18n::Lang::EN);
+        let mut backend = Some(Fake {
+            events: events(),
+            sent: Rc::default(),
+            manage: true,
+            pictures: Rc::default(),
+            asked: Vec::new(),
+            clock: Rc::new(Cell::new(NOW)),
+        });
+        test_harness_builder(egui::Theme::Dark).with_size(egui::vec2(1180.0, 1200.0)).build_ui_state(
+            move |ui, state: &mut Option<LauncherUi>| {
+                if state.is_none()
+                    && let Some(b) = backend.take()
+                {
+                    *state = Some(LauncherUi::new(ui.ctx(), Box::new(b), Settings { notify: false, ..Settings::default() }));
+                }
+                if let Some(l) = state.as_mut() {
+                    if live {
+                        l.logic(&ui.ctx().clone(), &mut LiveHost);
+                        l.ui(ui, &mut LiveHost);
+                    } else {
+                        l.logic(&ui.ctx().clone(), &mut OsMotion(Rc::default()));
+                        l.ui(ui, &mut OsMotion(Rc::default()));
+                    }
+                }
+            },
+            None,
+        )
+    };
+    let mut h = run(false);
+    h.run_steps(6);
+    h.get_by_label("Settings").click();
+    h.run_steps(6);
+    assert!(h.query_by_label("Use system title bar").is_none(), "hidden where the host offers nothing");
+
+    let mut h = run(true);
+    h.run_steps(6);
+    h.get_by_label("Settings").click();
+    h.run_steps(6);
+    h.get_by_label("Use system title bar").click();
+    // Collect over the frames after the click: the command goes out in the frame that sees the setting.
+    let mut asked = Vec::new();
+    for _ in 0..4 {
+        h.step();
+        asked.extend(h.output().viewport_output.values().flat_map(|v| v.commands.iter().cloned()));
+    }
+    assert!(h.state().as_ref().unwrap().settings.system_title_bar);
+    assert!(asked.contains(&egui::ViewportCommand::Decorations(true)), "{asked:?}");
 }

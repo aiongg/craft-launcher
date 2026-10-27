@@ -280,6 +280,8 @@ dependencies = [
  "craft-platform",
  "craft-quit",
  "craft-theme-store",
+ "craft-ui",
+ "craft-window",
  "eframe",
  "egui",
  "env_logger",
@@ -340,6 +342,7 @@ dependencies = [
  "craft-theme",
  "craft-theme-store",
  "craft-ui",
+ "craft-window",
  "egui",
  "egui_extras",
  "egui_kittest",
@@ -1053,6 +1056,7 @@ dependencies = [
  "craft-fonts-build",
  "craft-i18n",
  "craft-theme",
+ "craft-window",
  "egui",
  "epaint",
  "js-sys",
@@ -1088,6 +1092,18 @@ dependencies = [
  "winreg",
  "winsafe",
  "zip 9.1.0",
+]
+
+[[package]]
+name = "craft-window"
+version = "0.1.0"
+source = "git+https://github.com/aiongg/craft-libs?rev=4cfec85ae602772807003a863fab1da24e04e80e#4cfec85ae602772807003a863fab1da24e04e80e"
+dependencies = [
+ "egui",
+ "objc2 0.6.5",
+ "objc2-app-kit 0.3.2",
+ "objc2-foundation 0.3.2",
+ "wayland-client",
 ]
 
 [[package]]

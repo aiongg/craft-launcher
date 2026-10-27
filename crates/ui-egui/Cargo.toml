@@ -13,7 +13,9 @@ workspace = true
 [dependencies]
 artcraft-launcher-core = { workspace = true }
 egui = { workspace = true }
-craft-ui = { workspace = true }
+craft-ui = { workspace = true, features = ["window-frame"] }
+# The frame policy types the host answers with (no windowing code runs on the web).
+craft-window = { workspace = true }
 # The suite-theme contract and the shared theme store; the shell injects the store's watcher.
 craft-theme = { workspace = true }
 craft-theme-store = { workspace = true }

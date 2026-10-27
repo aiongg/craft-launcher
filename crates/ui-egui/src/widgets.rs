@@ -119,160 +119,19 @@ pub fn nav_icon(ui: &mut Ui, glyph: Glyph, tip: &str, height: f32, busy: bool) -
     if busy { resp } else { resp.on_hover_cursor(egui::CursorIcon::PointingHand) }
 }
 
-/// How far in from the window's edges a custom title bar's window resizes ([`window_edges`]).
-/// The title bar's own controls leave this band alone.
-const RESIZE_EDGE: f32 = 5.0;
-
-/// How wide the resize band along the window's edges is right now: nothing while the window is
-/// maximized or full screen, when `window_edges` offers no resizing and the edges are the screen's,
-/// so the controls there reach all the way to the corner (#374).
-fn resize_band(ctx: &egui::Context) -> f32 {
-    let (maximized, fullscreen) = ctx.input(|i| (i.viewport().maximized.unwrap_or(false), i.viewport().fullscreen.unwrap_or(false)));
-    if maximized || fullscreen { 0.0 } else { RESIZE_EDGE }
-}
-
-/// Custom title bars: dragging the header's empty space moves the window, and double-clicking it
-/// maximizes or restores it. Call before drawing the header, so its controls stay on top.
-pub fn title_bar_drag(ui: &mut Ui) {
-    let r = ui.max_rect();
-    let band = resize_band(ui.ctx());
-    let rect = Rect::from_min_max(r.min + vec2(band, band), r.max - vec2(band, 0.0));
-    let resp = ui.interact(rect, ui.scope_id().with("title-bar"), Sense::click_and_drag());
-    if resp.drag_started_by(egui::PointerButton::Primary) {
-        ui.ctx().send_viewport_cmd(egui::ViewportCommand::StartDrag);
-    }
-    if resp.double_clicked() {
-        let maximized = ui.input(|i| i.viewport().maximized.unwrap_or(false));
-        ui.ctx().send_viewport_cmd(egui::ViewportCommand::Maximized(!maximized));
-    }
-}
-
-/// A window button in a custom title bar.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-enum WindowButton {
-    Minimize,
-    Maximize,
-    Restore,
-    Close,
-}
-
-/// Minimize, maximize (or restore) and close, `height` tall, for a right-to-left layout: close
-/// ends up at the right.
-pub fn window_buttons(ui: &mut Ui, height: f32) {
-    let ctx = ui.ctx().clone();
-    let maximized = ctx.input(|i| i.viewport().maximized.unwrap_or(false));
-    if window_button(ui, WindowButton::Close, height).clicked() {
-        ctx.send_viewport_cmd(egui::ViewportCommand::Close);
-    }
-    let size = if maximized { WindowButton::Restore } else { WindowButton::Maximize };
-    if window_button(ui, size, height).clicked() {
-        ctx.send_viewport_cmd(egui::ViewportCommand::Maximized(!maximized));
-    }
-    if window_button(ui, WindowButton::Minimize, height).clicked() {
-        ctx.send_viewport_cmd(egui::ViewportCommand::Minimized(true));
-    }
-    rule(ui, height);
-}
-
-/// Draws one caption button and returns its click response; the caller sends the viewport
-/// command. Hit-testing excludes the top resize band (and, for close, the right-edge band) so
-/// the window edges stay resizable; when maximized there is no band and close reaches the
-/// corner.
-fn window_button(ui: &mut Ui, button: WindowButton, height: f32) -> Response {
-    let t = Tokens::get(ui.ctx());
-    let (rect, _) = ui.allocate_exact_size(vec2(46.0, height), Sense::hover());
-    // Clickable below the resize band along the top (and, for close, the right edge); maximized,
-    // there is no band and the close button takes the screen's corner, as Windows' own does.
-    let band = resize_band(ui.ctx());
-    let right = if button == WindowButton::Close { band } else { 0.0 };
-    let hit = Rect::from_min_max(rect.min + vec2(0.0, band), rect.max - vec2(right, 0.0));
-    let resp = ui.interact(hit, ui.scope_id().with(("window-button", button as u8)), Sense::click());
-    let (fill, ink) = match (button, resp.hovered()) {
-        (WindowButton::Close, true) => (Color32::from_rgb(0xc4, 0x2b, 0x1c), Color32::WHITE),
-        (_, true) => (t.line, t.ink_strong),
-        (_, false) => (Color32::TRANSPARENT, t.muted),
-    };
-    let p = ui.painter();
-    p.rect_filled(rect, CornerRadius::ZERO, fill);
-    let c = rect.center();
-    let stroke = Stroke::new(1.0, ink);
-    let label = match button {
-        WindowButton::Minimize => tl!("Minimize"),
-        WindowButton::Maximize => tl!("Maximize"),
-        WindowButton::Restore => tl!("Restore"),
-        WindowButton::Close => tl!("Close"),
-    };
-    // Half the glyph's size: 10 px, like Windows' own caption buttons.
-    let s = 5.0;
-    match button {
-        WindowButton::Minimize => {
-            p.hline(c.x - s..=c.x + s, c.y, stroke);
-        }
-        WindowButton::Maximize => {
-            p.rect_stroke(Rect::from_center_size(c, vec2(2.0 * s, 2.0 * s)), CornerRadius::ZERO, stroke, egui::StrokeKind::Inside);
-        }
-        WindowButton::Restore => {
-            // A window in front of another.
-            let front = Rect::from_min_size(c + vec2(-s, -s + 2.0), vec2(2.0 * s - 2.0, 2.0 * s - 2.0));
-            p.rect_stroke(front, CornerRadius::ZERO, stroke, egui::StrokeKind::Inside);
-            p.hline(c.x - s + 2.0..=c.x + s, c.y - s, stroke);
-            p.vline(c.x + s, c.y - s..=c.y + s - 2.0, stroke);
-        }
-        WindowButton::Close => {
-            p.line_segment([c + vec2(-s, -s), c + vec2(s, s)], stroke);
-            p.line_segment([c + vec2(-s, s), c + vec2(s, -s)], stroke);
-        }
-    }
-    resp.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Button, true, label));
-    resp.on_hover_text(label)
-}
-
-/// Custom title bars: a hairline round the window, and resizing it from its edges and corners.
-pub fn window_edges(ctx: &egui::Context) {
-    use egui::CursorIcon as C;
-    use egui::viewport::ResizeDirection as D;
+/// Integrated title bars: a hairline round the window, unless it is maximized or full screen.
+pub fn window_border(ctx: &egui::Context) {
     let (maximized, fullscreen) = ctx.input(|i| (i.viewport().maximized.unwrap_or(false), i.viewport().fullscreen.unwrap_or(false)));
     if maximized || fullscreen {
         return;
     }
     let t = Tokens::get(ctx);
-    let r = ctx.content_rect();
     ctx.layer_painter(egui::LayerId::new(egui::Order::Foreground, egui::Id::unique("window-border"))).rect_stroke(
-        r,
+        ctx.content_rect(),
         CornerRadius::ZERO,
         t.hairline(),
         egui::StrokeKind::Inside,
     );
-    let Some(p) = ctx.input(|i| i.pointer.hover_pos()).filter(|p| r.contains(*p)) else { return };
-    let near = |d: f32| d < RESIZE_EDGE;
-    // A corner takes a little of each edge next to it.
-    let corner = |d: f32| d < 3.0 * RESIZE_EDGE;
-    let (left, right, top, bottom) = (p.x - r.left(), r.right() - p.x, p.y - r.top(), r.bottom() - p.y);
-    let hit = if (near(top) && corner(left)) || (near(left) && corner(top)) {
-        Some((D::NorthWest, C::ResizeNorthWest))
-    } else if (near(top) && corner(right)) || (near(right) && corner(top)) {
-        Some((D::NorthEast, C::ResizeNorthEast))
-    } else if (near(bottom) && corner(left)) || (near(left) && corner(bottom)) {
-        Some((D::SouthWest, C::ResizeSouthWest))
-    } else if (near(bottom) && corner(right)) || (near(right) && corner(bottom)) {
-        Some((D::SouthEast, C::ResizeSouthEast))
-    } else if near(top) {
-        Some((D::North, C::ResizeNorth))
-    } else if near(bottom) {
-        Some((D::South, C::ResizeSouth))
-    } else if near(left) {
-        Some((D::West, C::ResizeWest))
-    } else if near(right) {
-        Some((D::East, C::ResizeEast))
-    } else {
-        None
-    };
-    if let Some((direction, cursor)) = hit {
-        ctx.set_cursor_icon(cursor);
-        if ctx.input(|i| i.pointer.primary_pressed()) {
-            ctx.send_viewport_cmd(egui::ViewportCommand::BeginResize(direction));
-        }
-    }
 }
 
 /// Whether `url` may be handed to the system/browser opener.

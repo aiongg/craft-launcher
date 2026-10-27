@@ -4,7 +4,7 @@
 use artcraft_launcher_core::{Os, PackageKind};
 use egui::{RichText, Ui, vec2};
 
-use crate::app::{Host, LauncherUi};
+use crate::app::{Host, LauncherUi, SystemTitleBar};
 use crate::i18n::fmt;
 use crate::settings::{CheckEvery, Settings};
 use crate::sheet;
@@ -123,6 +123,7 @@ impl LauncherUi {
                 let (this, host) = &mut *state;
                 this.settings_install(ui, &mut **host);
                 this.settings_background(ui, &mut **host);
+                this.settings_window(ui, &**host);
                 this.settings_community(ui);
             },
         );
@@ -318,6 +319,20 @@ impl LauncherUi {
                 && let Err(e) = host.set_login_item(on)
             {
                 self.toast_from_ui(fmt(tl!("Couldn't change the login item: {e}"), &[("e", &e)]), true);
+            }
+        });
+    }
+
+    /// "Use system title bar", where it changes anything.
+    fn settings_window(&mut self, ui: &mut Ui, host: &dyn Host) {
+        let applies = host.system_title_bar();
+        if applies == SystemTitleBar::Hidden {
+            return;
+        }
+        sheet::panel(ui, tl!("Window"), |ui| {
+            ui.checkbox(&mut self.settings.system_title_bar, tl!("Use system title bar"));
+            if applies == SystemTitleBar::NextLaunch {
+                note(ui, tl!("Takes effect the next time ArtCraft Launcher starts."));
             }
         });
     }

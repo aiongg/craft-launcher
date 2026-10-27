@@ -7,6 +7,7 @@ use std::sync::Arc;
 pub use craft_theme::{Mode, Selection, SuiteTheme, ThemeId, Variant};
 use craft_theme::{Resolution, Resolved, Rgba};
 use craft_ui::theme::color32;
+use craft_ui::title_bar::CaptionColors;
 use egui::epaint::text::VariationCoords;
 use egui::{Color32, CornerRadius, FontData, FontDefinitions, FontFamily, FontId, FontTweak, Stroke, TextStyle, Visuals};
 use serde::{Deserialize, Serialize};
@@ -371,10 +372,48 @@ pub fn slot_tokens(sel: &Selection, lookup: &dyn Fn(&ThemeId) -> Option<SuiteThe
     (slot(Variant::Light), slot(Variant::Dark))
 }
 
+/// The caption buttons' colours for egui's light and dark slots under `sel`: the suite theme's
+/// through [`CaptionColors::from_resolved`], the launcher's own palette's from its tokens. The bar
+/// colour is the header's fill, the page `bg`.
+fn slot_captions(sel: &Selection, lookup: &dyn Fn(&ThemeId) -> Option<SuiteTheme>) -> (CaptionColors, CaptionColors) {
+    let slot = |os: Variant| match craft_theme::resolve(sel, Some(os), FALLBACK_VARIANT, lookup) {
+        Resolution::Theme(r) => CaptionColors { bar: color32(r.roles.background), ..CaptionColors::from_resolved(&r) },
+        Resolution::AppDefault { variant, .. } => own_captions(&Tokens::app_default(variant)),
+    };
+    (slot(Variant::Light), slot(Variant::Dark))
+}
+
+/// The launcher's own palette's caption colours: its ink, with the ink's own tints under the pointer.
+fn own_captions(t: &Tokens) -> CaptionColors {
+    let tint = |alpha: u8| Color32::from_rgba_unmultiplied(t.ink.r(), t.ink.g(), t.ink.b(), alpha);
+    CaptionColors { glyph: t.ink, glyph_inactive: t.muted, hover: tint(26), pressed: tint(51), bar: t.bg }
+}
+
+const SLOT_CAPTIONS_KEY: &str = "artcraft-launcher-slot-captions";
+
+/// The caption colours in the two egui style slots, kept in egui's temp data.
+#[derive(Clone, Copy)]
+struct SlotCaptions {
+    light: CaptionColors,
+    dark: CaptionColors,
+}
+
+/// The caption colours [`install_selection`] stored for the slot egui is drawing with.
+pub fn caption_colors(ctx: &egui::Context) -> CaptionColors {
+    let stored = ctx.data(|d| d.get_temp::<SlotCaptions>(egui::Id::unique(SLOT_CAPTIONS_KEY)));
+    match (stored, ctx.theme()) {
+        (Some(slots), egui::Theme::Dark) => slots.dark,
+        (Some(slots), egui::Theme::Light) => slots.light,
+        (None, _) => own_captions(&Tokens::get(ctx)),
+    }
+}
+
 /// Installs the styles for `sel`, a theme and a mode; `lookup` finds suite themes by id.
 pub fn install_selection(ctx: &egui::Context, sel: &Selection, lookup: &dyn Fn(&ThemeId) -> Option<SuiteTheme>) {
     let (light, dark) = slot_tokens(sel, lookup);
     install(ctx, light, dark);
+    let (light, dark) = slot_captions(sel, lookup);
+    ctx.data_mut(|d| d.insert_temp(egui::Id::unique(SLOT_CAPTIONS_KEY), SlotCaptions { light, dark }));
 }
 
 /// Applies the launcher's own palette in the mode `choice`: "Match system" gives each slot its
