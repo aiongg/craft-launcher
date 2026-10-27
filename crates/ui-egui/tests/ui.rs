@@ -2560,7 +2560,7 @@ fn settings_pick_the_launchers_own_theme_and_mode() {
     h.run_steps(3);
     let appearance = h.state().as_ref().unwrap().settings.appearance();
     assert!(!appearance.follow_suite);
-    assert_eq!(appearance.own, Selection { theme: ThemeId::parse("craft.graphite").unwrap(), mode: Mode::Light });
+    assert_eq!(appearance.own, Some(Selection { theme: ThemeId::parse("craft.graphite").unwrap(), mode: Mode::Light }));
     let tokens = artcraft_launcher_ui_egui::theme::Tokens::get(&h.ctx);
     assert!(!tokens.dark, "a fixed Light draws light in the dark slot");
     assert_eq!(tokens.bg, egui::Color32::from_rgb(0xf1, 0xf1, 0xf3), "Graphite's light background");

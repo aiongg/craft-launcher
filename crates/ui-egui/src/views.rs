@@ -126,7 +126,7 @@ impl LauncherUi {
             .inner_margin(egui::Margin::symmetric(16, 10))
             .show(ui, |ui| {
                 ui.horizontal(|ui| {
-                    widgets::tag(ui, tl!("Update"), t.accent, Color32::WHITE);
+                    widgets::tag(ui, tl!("Update"), t.accent, t.on_accent);
                     ui.add_space(4.0);
                     ui.label(
                         RichText::new(fmt(tl!("ArtCraft Launcher {version} is available."), &[("version", &r.version_label())]))

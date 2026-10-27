@@ -10,6 +10,8 @@ Tokens {
     line_strong: #61_60_5F_66,
     accent: #2D_81_FF_FF,
     accent_ink: #74_AA_FF_FF,
+    on_accent: #FF_FF_FF_FF,
+    selection: #2D_81_FF_FF,
     invert_bg: #FF_FF_FF_FF,
     invert_fg: #0B_0B_0C_FF,
     good: #3F_D6_B8_FF,

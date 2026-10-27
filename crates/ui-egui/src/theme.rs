@@ -56,9 +56,10 @@ pub fn theme_name(name: &str) -> &str {
     crate::i18n::t(name)
 }
 
-/// The launcher's own palette, as a theme choice.
-pub fn app_default_name() -> &'static str {
-    crate::i18n::t("Launcher default")
+/// The app-default theme's name: "App default" in the suite's choice, where it gives each app its
+/// own palette, else "Launcher default".
+pub fn app_default_name(following_suite: bool) -> &'static str {
+    if following_suite { crate::i18n::t("App default") } else { crate::i18n::t("Launcher default") }
 }
 
 impl From<ThemeChoice> for Mode {
@@ -105,6 +106,10 @@ pub struct Tokens {
     pub accent: Color32,
     /// The brand blue, for text and icons.
     pub accent_ink: Color32,
+    /// Text and icons on `accent`.
+    pub on_accent: Color32,
+    /// Selected text's background.
+    pub selection: Color32,
     /// Primary buttons and hover inversion.
     pub invert_bg: Color32,
     pub invert_fg: Color32,
@@ -136,6 +141,8 @@ impl Tokens {
         line_strong: ink_alpha(0xf2f1ee, 102),
         accent: hex(0x2d81ff),
         accent_ink: hex(0x74aaff),
+        on_accent: Color32::WHITE,
+        selection: hex(0x2d81ff),
         invert_bg: hex(0xffffff),
         invert_fg: hex(0x0b0b0c),
         // PdfCraft's and LightCraft's inks, so status colours come from the site's palette.
@@ -156,6 +163,8 @@ impl Tokens {
         line_strong: ink_alpha(0x101014, 102),
         accent: hex(0x2d81ff),
         accent_ink: hex(0x1659c4),
+        on_accent: Color32::WHITE,
+        selection: hex(0x2d81ff),
         invert_bg: hex(0x101014),
         invert_fg: hex(0xf2f1ee),
         good: hex(0x0a7563),
@@ -190,6 +199,8 @@ impl Tokens {
             line_strong: color32(derived.control_edge),
             accent: color32(roles.accent),
             accent_ink: color32(derived.accent_text),
+            on_accent: color32(roles.on_accent),
+            selection: color32(roles.selection),
             invert_bg: color32(roles.text),
             invert_fg: color32(roles.background),
             good: color32(roles.good),
@@ -217,6 +228,13 @@ impl Tokens {
             (None, egui::Theme::Dark) => Self::DARK,
             (None, egui::Theme::Light) => Self::LIGHT,
         }
+    }
+
+    /// White or black, whichever reads better on `bg` (filled buttons in a status colour).
+    pub fn ink_on(bg: Color32) -> Color32 {
+        let rgba = |c: Color32| Rgba(c.to_srgba_unmultiplied());
+        let on = |ink: Color32| craft_theme::contrast::ratio(rgba(ink), rgba(bg));
+        if on(Color32::WHITE) >= on(Color32::BLACK) { Color32::WHITE } else { Color32::BLACK }
     }
 
     pub fn hairline(&self) -> Stroke {
@@ -280,8 +298,8 @@ fn visuals(t: &Tokens) -> Visuals {
     v.popup_shadow = shadow(t);
     v.override_text_color = Some(t.ink);
     v.hyperlink_color = t.accent_ink;
-    v.selection.bg_fill = t.accent;
-    v.selection.stroke = Stroke::new(1.0, Color32::WHITE);
+    v.selection.bg_fill = t.selection;
+    v.selection.stroke = Stroke::new(1.0, t.on_accent);
     v.warn_fg_color = t.warn;
     v.error_fg_color = t.bad;
     for (w, fill, stroke, fg) in [

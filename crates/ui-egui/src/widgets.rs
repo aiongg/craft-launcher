@@ -357,7 +357,7 @@ pub fn button(ui: &mut Ui, text: &str, kind: Kind, width: f32) -> Response {
     let hovered = resp.hovered() && enabled;
     let (fill, stroke, color) = match kind {
         Kind::Primary => (t.invert_bg.gamma_multiply(if hovered { 0.8 } else { 1.0 }), Stroke::NONE, t.invert_fg),
-        Kind::Danger => (t.bad.gamma_multiply(if hovered { 0.8 } else { 1.0 }), Stroke::NONE, Color32::WHITE),
+        Kind::Danger => (t.bad.gamma_multiply(if hovered { 0.8 } else { 1.0 }), Stroke::NONE, Tokens::ink_on(t.bad)),
         Kind::Secondary if hovered => (t.invert_bg, Stroke::NONE, t.invert_fg),
         Kind::Secondary => (t.bg, Stroke::new(1.0, t.line_strong), t.ink),
     };

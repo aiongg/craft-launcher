@@ -23,22 +23,24 @@ pub struct AppAppearance {
     /// "Follow suite": the theme and mode chosen in any Craft app that follows the suite.
     pub follow_suite: bool,
     /// "This app only": the launcher's own theme and mode, kept while it follows the suite so
-    /// turning the override back on restores it.
-    pub own: Selection,
+    /// turning the override back on restores it. `None` until one is chosen: switching to "This
+    /// app only" then starts from what is shown.
+    #[serde(default)]
+    pub own: Option<Selection>,
     /// The suite selection as last seen, shown while the suite folder can't be read.
     #[serde(default)]
     pub last_suite: Accepted,
 }
 
 impl AppAppearance {
-    /// A fresh install: follow the suite; the own choice starts at what the suite shows by default.
+    /// A fresh install: follow the suite, with no own choice yet.
     pub fn follow_suite() -> Self {
-        Self { follow_suite: true, own: app_defaults().selection(), last_suite: Accepted::default() }
+        Self { follow_suite: true, own: None, last_suite: Accepted::default() }
     }
 
     /// The launcher's own choice.
     pub fn own(own: Selection) -> Self {
-        Self { follow_suite: false, own, last_suite: Accepted::default() }
+        Self { follow_suite: false, own: Some(own), last_suite: Accepted::default() }
     }
 
     /// The launcher's own palette in `theme`'s mode; also what settings saved before suite themes become.
@@ -46,8 +48,13 @@ impl AppAppearance {
         Self::own(Selection { theme: ThemeId::app_default(), mode: theme.into() })
     }
 
+    /// The launcher's own choice when it has one and doesn't follow the suite.
+    pub fn own_choice(&self) -> Option<&Selection> {
+        self.own.as_ref().filter(|_| !self.follow_suite)
+    }
+
     pub fn choice(&self) -> AppChoice {
-        if self.follow_suite { AppChoice::FollowSuite } else { AppChoice::Own(self.own.clone()) }
+        self.own_choice().map_or(AppChoice::FollowSuite, |own| AppChoice::Own(own.clone()))
     }
 
     /// The theme and mode to draw, given the suite's choice.

@@ -358,7 +358,7 @@ impl LauncherUi {
         let mut appearance = self.settings.appearance();
         let shown = self.effective_appearance();
         let following = appearance.follow_suite && self.suite.shared;
-        let themes = theme_options(&index);
+        let themes = theme_options(&index, following);
         let mut picked_theme = themes.iter().position(|(id, _)| *id == shown.theme).unwrap_or(usize::MAX);
         let mut mode = ThemeChoice::from(shown.mode);
         let mut follow = appearance.follow_suite;
@@ -376,10 +376,11 @@ impl LauncherUi {
                 }
                 ui.add_space(6.0);
             }
+            // Apart, so a row that wraps keeps each theme in a box of its own.
             ui.horizontal_wrapped(|ui| {
                 let cells: Vec<(usize, Cell<'_>)> =
                     themes.iter().enumerate().map(|(i, (_, name))| (i, Cell { label: name.as_str(), tip: name.as_str(), count: None })).collect();
-                widgets::cells(ui, &mut picked_theme, &cells);
+                widgets::cells_apart(ui, &mut picked_theme, &cells, 6.0);
             });
             ui.add_space(6.0);
             ui.horizontal(|ui| {
@@ -390,27 +391,33 @@ impl LauncherUi {
         let mode = Some(Mode::from(mode)).filter(|m| *m != shown.mode);
         if follow != appearance.follow_suite {
             appearance.follow_suite = follow;
+            // The first own choice is what is shown now, so switching doesn't change the look.
+            if !follow && appearance.own.is_none() {
+                appearance.own = Some(shown);
+            }
         } else if following {
             let change = SelectionChange { theme: picked, mode };
             if !change.is_empty() {
                 self.change_suite(change);
             }
-        } else {
+        } else if picked.is_some() || mode.is_some() {
             // A launcher-only choice starts from what is shown, so the look changes only where asked.
-            if picked.is_some() || mode.is_some() {
-                appearance.follow_suite = false;
-                appearance.own = Selection { theme: picked.unwrap_or(shown.theme), mode: mode.unwrap_or(shown.mode) };
-            }
+            appearance.follow_suite = false;
+            appearance.own = Some(Selection { theme: picked.unwrap_or(shown.theme), mode: mode.unwrap_or(shown.mode) });
         }
         self.settings.appearance = Some(appearance);
     }
 }
 
-/// The themes on offer, by id and name: the built-ins (ArtCraft first), the launcher's own
-/// palette, then the library's.
-fn theme_options(library: &[ThemeEntry]) -> Vec<(ThemeId, String)> {
-    let mut themes: Vec<(ThemeId, String)> = craft_theme::builtins().iter().map(|t| (t.id.clone(), theme::theme_name(&t.name).to_string())).collect();
-    themes.push((ThemeId::app_default(), theme::app_default_name().to_string()));
+/// The themes on offer, by id and name: ArtCraft, the app default ("App default" while
+/// `following` the suite, where it means each app's own palette), the other built-ins, then the
+/// library's.
+fn theme_options(library: &[ThemeEntry], following: bool) -> Vec<(ThemeId, String)> {
+    let suite_default = ThemeId::suite_default();
+    let builtin = |t: &craft_theme::SuiteTheme| (t.id.clone(), theme::theme_name(&t.name).to_string());
+    let mut themes: Vec<(ThemeId, String)> = craft_theme::builtins().iter().filter(|t| t.id == suite_default).map(builtin).collect();
+    themes.push((ThemeId::app_default(), theme::app_default_name(following).to_string()));
+    themes.extend(craft_theme::builtins().iter().filter(|t| t.id != suite_default).map(builtin));
     let mut user: Vec<&ThemeEntry> = library.iter().filter(|e| !e.id.is_builtin()).collect();
     user.sort_by(|a, b| a.name.cmp(&b.name).then_with(|| a.id.as_str().cmp(b.id.as_str())));
     themes.extend(user.into_iter().map(|e| (e.id.clone(), e.name.clone())));

@@ -187,7 +187,7 @@ mod tests {
 
         let new = Scratch::new("appearance-new");
         let mut appearance = AppAppearance::follow_suite();
-        appearance.own = Selection { theme: ThemeId::parse("craft.graphite").unwrap(), mode: Mode::Light };
+        appearance.own = Some(Selection { theme: ThemeId::parse("craft.graphite").unwrap(), mode: Mode::Light });
         appearance.last_suite =
             craft_theme_store::Accepted::from_selection(Selection { theme: ThemeId::parse("craft.high-contrast").unwrap(), mode: Mode::System });
         appearance.last_suite.revision = 7;

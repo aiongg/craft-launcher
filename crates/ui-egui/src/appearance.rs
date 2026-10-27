@@ -97,7 +97,7 @@ impl LauncherUi {
     /// Names the library theme of the launcher's own choice, so the watcher keeps it parsed.
     fn send_app_theme(&mut self) {
         let appearance = self.settings.appearance();
-        let wanted = (!appearance.follow_suite && !appearance.own.theme.is_builtin()).then_some(appearance.own.theme);
+        let wanted = appearance.own_choice().map(|own| own.theme.clone()).filter(|id| !id.is_builtin());
         if self.suite.app_theme_sent.as_ref() != Some(&wanted) {
             self.suite.watch.request(Op::AppTheme(wanted.clone()));
             self.suite.app_theme_sent = Some(wanted);

@@ -1336,7 +1336,7 @@ mod tests {
 
         let mut appearance = launcher.settings.appearance();
         appearance.follow_suite = false;
-        appearance.own = Selection { theme: ThemeId::app_default(), mode: Mode::Light };
+        appearance.own = Some(Selection { theme: ThemeId::app_default(), mode: Mode::Light });
         launcher.settings.appearance = Some(appearance);
         assert_eq!(drawn_tokens(&mut launcher, &ctx, 0.3), Tokens::LIGHT, "a fixed Light puts the light palette in the dark slot too");
         assert_eq!(launcher.settings.theme, theme::ThemeChoice::Light, "older builds read the mode in use");
@@ -1345,6 +1345,116 @@ mod tests {
         appearance.follow_suite = true;
         launcher.settings.appearance = Some(appearance);
         assert_eq!(drawn_tokens(&mut launcher, &ctx, 0.4), builtin_tokens("craft.graphite", Variant::Dark));
-        assert_eq!(launcher.settings.appearance().own.mode, Mode::Light);
+        assert_eq!(launcher.settings.appearance().own.map(|own| own.mode), Some(Mode::Light));
+    }
+
+    /// The files in `dir` and below, with their bytes; empty when it doesn't exist.
+    fn folder_contents(dir: &std::path::Path) -> Vec<(std::path::PathBuf, Vec<u8>)> {
+        let mut found = Vec::new();
+        let mut todo = vec![dir.to_path_buf()];
+        while let Some(d) = todo.pop() {
+            for entry in std::fs::read_dir(&d).into_iter().flatten().flatten() {
+                let path = entry.path();
+                if path.is_dir() {
+                    todo.push(path);
+                } else {
+                    found.push((path.clone(), std::fs::read(&path).unwrap()));
+                }
+            }
+        }
+        found.sort();
+        found
+    }
+
+    /// Passes every 50 ms while the watcher's worker reads the folder, until `done` holds or after
+    /// `passes`. Returns whether `done` held.
+    fn frames_until(launcher: &mut LauncherUi, ctx: &egui::Context, passes: u32, mut done: impl FnMut(&egui::Context) -> bool) -> bool {
+        for i in 0..passes {
+            frame(launcher, ctx, 1.0 + f64::from(i) * 0.05);
+            if done(ctx) {
+                return true;
+            }
+            std::thread::sleep(std::time::Duration::from_millis(50));
+        }
+        false
+    }
+
+    /// On a real suite folder: starting and drawing write nothing, and a suite theme another Craft
+    /// app picked shows with the same core colours as everywhere else.
+    #[test]
+    fn a_suite_folder_is_read_without_writing_and_its_theme_shows() {
+        use craft_theme::Variant;
+        use craft_theme_store::testing::{SAMPLE_THEME_ID, SAMPLE_THEME_JSON, sample_roles};
+        let dir = std::env::temp_dir().join(format!("artcraft-launcher-suite-folder-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let (mut launcher, _sent, ctx) = launcher();
+        let options = craft_theme_store::StoreOptions::new("artcraft-launcher test");
+        launcher.set_suite(craft_theme_store::SuiteWatch::open(&craft_theme_store::SuiteDir::at(&dir), options, || {}), true);
+        // Longer than the watcher's first stat of the folder.
+        frames_until(&mut launcher, &ctx, 20, |_| false);
+        assert_eq!(Tokens::get(&ctx), builtin_tokens("craft.artcraft", Variant::Dark), "nothing chosen yet: ArtCraft, dark");
+        assert!(folder_contents(&dir).is_empty(), "starting wrote to the suite folder");
+
+        // Another Craft app imports the sample theme and picks it for the suite, in dark.
+        std::fs::create_dir_all(dir.join("library")).unwrap();
+        std::fs::write(dir.join("library").join(format!("{SAMPLE_THEME_ID}.json")), SAMPLE_THEME_JSON).unwrap();
+        let selection = format!(
+            r#"{{ "schema_version": 1, "revision": 1, "library_revision": 1, "suite": {{ "theme": "{SAMPLE_THEME_ID}", "mode": "dark" }}, "written_by": "test" }}"#
+        );
+        std::fs::write(dir.join("selection.json"), &selection).unwrap();
+        let written = folder_contents(&dir);
+        let sample = sample_roles(Variant::Dark);
+        let shown = frames_until(&mut launcher, &ctx, 200, |ctx| Tokens::get(ctx).bg == craft_ui::theme::color32(sample.background));
+        assert!(shown, "the suite's theme never showed: {:?}", launcher.suite.watch.snapshot());
+        let t = Tokens::get(&ctx);
+        assert_eq!(
+            [t.ink, t.bg, t.accent, t.good, t.warn, t.bad],
+            [sample.text, sample.background, sample.accent, sample.good, sample.warn, sample.bad].map(craft_ui::theme::color32)
+        );
+        assert_eq!(folder_contents(&dir), written, "following the suite changed its files");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// A fresh install following the suite keeps its look when the user switches to "This app
+    /// only": the own choice starts from what is shown.
+    #[test]
+    fn switching_a_fresh_install_to_its_own_choice_keeps_the_look() {
+        use craft_theme::{Mode, Selection, ThemeId};
+        use egui_kittest::kittest::Queryable;
+        let mut backend = Some(Recorder { sent: Rc::default() });
+        let settings = Settings { language: "en".into(), notify: false, ..Settings::default() };
+        let graphite = ThemeId::parse("craft.graphite").unwrap();
+        let suite_choice = graphite.clone();
+        let mut h = Harness::builder().with_size(egui::vec2(1180.0, 900.0)).with_theme(egui::Theme::Dark).build_ui_state(
+            move |ui, state: &mut Option<LauncherUi>| {
+                if state.is_none()
+                    && let Some(backend) = backend.take()
+                {
+                    let mut launcher = LauncherUi::new(ui.ctx(), Box::new(backend), settings.clone());
+                    launcher.set_suite(craft_theme_store::SuiteWatch::memory(), true);
+                    launcher.change_suite(craft_theme_store::SelectionChange::whole(Selection { theme: suite_choice.clone(), mode: Mode::Light }));
+                    *state = Some(launcher);
+                }
+                if let Some(launcher) = state.as_mut() {
+                    launcher.logic(&ui.ctx().clone(), &mut NoHost);
+                    launcher.ui(ui, &mut NoHost);
+                }
+            },
+            None,
+        );
+        h.run_steps(4);
+        let before = Tokens::get(&h.ctx);
+        assert_eq!(h.state().as_ref().unwrap().settings.appearance().own, None);
+        h.get_by_label("Settings").click();
+        h.run_steps(4);
+        h.get_by_label("This app only").scroll_to_me();
+        h.run_steps(2);
+        h.get_by_label("This app only").click();
+        h.run_steps(3);
+        let appearance = h.state().as_ref().unwrap().settings.appearance();
+        assert!(!appearance.follow_suite);
+        assert_eq!(appearance.own, Some(Selection { theme: graphite, mode: Mode::Light }));
+        assert_eq!(Tokens::get(&h.ctx), before, "the look stayed");
     }
 }
