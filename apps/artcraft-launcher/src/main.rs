@@ -615,8 +615,11 @@ impl Launcher {
     /// Watches the suite's theme selection. The tray keeps it running; a change shows when the
     /// window opens.
     fn watch_suite(&mut self, waker: &Arc<Waker>) {
+        let appearance = self.ui.settings.appearance();
+        // Both go into the first snapshot, so the window opens in the saved theme without a flash.
         let options = craft_theme_store::StoreOptions::new(concat!("artcraft-launcher ", env!("CARGO_PKG_VERSION")))
-            .last_accepted(self.ui.settings.appearance().last_suite);
+            .app_theme(appearance.own_choice().map(|own| own.theme.clone()))
+            .last_accepted(appearance.last_suite);
         let wake = waker.clone();
         let watch = craft_theme_store::SuiteWatch::open(&self.suite_dir, options, move || wake.wake());
         self.ui.set_suite(watch, !self.suite_dir.is_memory());
