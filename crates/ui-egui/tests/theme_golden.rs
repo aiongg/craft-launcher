@@ -15,6 +15,8 @@ fn fixture(name: &str, actual: &str) {
         return;
     }
     let expected = std::fs::read_to_string(&path).unwrap_or_else(|_| panic!("fixture missing: {}; run with UPDATE_GOLDEN=1", path.display()));
+    // A Windows checkout may turn the fixtures' line endings into CRLF.
+    let expected = expected.replace("\r\n", "\n");
     assert!(expected == actual, "{name} differs from {} (rerun with UPDATE_GOLDEN=1 to review the change)", path.display());
 }
 
