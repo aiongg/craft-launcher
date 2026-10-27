@@ -834,10 +834,7 @@ impl eframe::App for Shell<'_> {
         // The portal's answer replaces winit's; no answer clears it so egui uses the fallback.
         #[cfg(all(unix, not(target_os = "macos")))]
         if let Some(watcher) = &self.launcher.appearance {
-            raw_input.system_theme = watcher.current().map(|theme| match theme {
-                craft_platform::appearance::Theme::Dark => egui::Theme::Dark,
-                craft_platform::appearance::Theme::Light => egui::Theme::Light,
-            });
+            portal_system_theme(raw_input, watcher.current());
         }
         self.launcher.ui.raw_input(ctx, raw_input);
     }
@@ -852,8 +849,31 @@ impl eframe::App for Shell<'_> {
     }
 }
 
+/// Sets egui's system theme from the portal's answer; no answer clears winit's.
+#[cfg(all(unix, not(target_os = "macos")))]
+fn portal_system_theme(raw: &mut egui::RawInput, answer: Option<craft_platform::appearance::Theme>) {
+    use craft_platform::appearance::Theme;
+    raw.system_theme = answer.map(|theme| match theme {
+        Theme::Dark => egui::Theme::Dark,
+        Theme::Light => egui::Theme::Light,
+    });
+}
+
 #[cfg(test)]
 mod tests {
+    #[cfg(all(unix, not(target_os = "macos")))]
+    #[test]
+    fn portal_answer_replaces_winit_and_none_clears_it() {
+        use craft_platform::appearance::Theme;
+        let mut raw = egui::RawInput { system_theme: Some(egui::Theme::Light), ..Default::default() };
+        super::portal_system_theme(&mut raw, Some(Theme::Dark));
+        assert_eq!(raw.system_theme, Some(egui::Theme::Dark));
+        super::portal_system_theme(&mut raw, Some(Theme::Light));
+        assert_eq!(raw.system_theme, Some(egui::Theme::Light));
+        super::portal_system_theme(&mut raw, None);
+        assert_eq!(raw.system_theme, None);
+    }
+
     use std::ptr::NonNull;
     use std::sync::atomic::{AtomicI64, AtomicUsize, Ordering};
     use std::sync::mpsc::Sender;
