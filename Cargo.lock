@@ -966,12 +966,12 @@ dependencies = [
 [[package]]
 name = "craft-fonts-build"
 version = "0.1.0"
-source = "git+https://github.com/aiongg/craft-libs?rev=6c123fe14a54142edb2b078dcaba0aae9e693d89#6c123fe14a54142edb2b078dcaba0aae9e693d89"
+source = "git+https://github.com/storytold/craft-libs?rev=6563c88657732babb27b46c5364b813e9178d7fe#6563c88657732babb27b46c5364b813e9178d7fe"
 
 [[package]]
 name = "craft-i18n"
 version = "0.1.0"
-source = "git+https://github.com/aiongg/craft-libs?rev=6c123fe14a54142edb2b078dcaba0aae9e693d89#6c123fe14a54142edb2b078dcaba0aae9e693d89"
+source = "git+https://github.com/storytold/craft-libs?rev=6563c88657732babb27b46c5364b813e9178d7fe#6563c88657732babb27b46c5364b813e9178d7fe"
 dependencies = [
  "fixed_decimal",
  "icu_decimal",
@@ -994,7 +994,7 @@ dependencies = [
 [[package]]
 name = "craft-platform"
 version = "0.1.0"
-source = "git+https://github.com/aiongg/craft-libs?rev=6c123fe14a54142edb2b078dcaba0aae9e693d89#6c123fe14a54142edb2b078dcaba0aae9e693d89"
+source = "git+https://github.com/storytold/craft-libs?rev=6563c88657732babb27b46c5364b813e9178d7fe#6563c88657732babb27b46c5364b813e9178d7fe"
 dependencies = [
  "async-channel",
  "async-io",
@@ -1006,7 +1006,7 @@ dependencies = [
 [[package]]
 name = "craft-quit"
 version = "0.1.0"
-source = "git+https://github.com/aiongg/craft-libs?rev=6c123fe14a54142edb2b078dcaba0aae9e693d89#6c123fe14a54142edb2b078dcaba0aae9e693d89"
+source = "git+https://github.com/storytold/craft-libs?rev=6563c88657732babb27b46c5364b813e9178d7fe#6563c88657732babb27b46c5364b813e9178d7fe"
 dependencies = [
  "dispatch2",
  "egui",
@@ -1015,12 +1015,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "craft-theme"
+version = "0.1.0"
+source = "git+https://github.com/storytold/craft-libs?rev=6563c88657732babb27b46c5364b813e9178d7fe#6563c88657732babb27b46c5364b813e9178d7fe"
+
+[[package]]
 name = "craft-ui"
 version = "0.1.0"
-source = "git+https://github.com/aiongg/craft-libs?rev=6c123fe14a54142edb2b078dcaba0aae9e693d89#6c123fe14a54142edb2b078dcaba0aae9e693d89"
+source = "git+https://github.com/storytold/craft-libs?rev=6563c88657732babb27b46c5364b813e9178d7fe#6563c88657732babb27b46c5364b813e9178d7fe"
 dependencies = [
  "craft-fonts-build",
  "craft-i18n",
+ "craft-theme",
  "egui",
  "epaint",
  "js-sys",
@@ -1037,7 +1043,7 @@ dependencies = [
 [[package]]
 name = "craft-update"
 version = "0.1.0"
-source = "git+https://github.com/aiongg/craft-libs?rev=6c123fe14a54142edb2b078dcaba0aae9e693d89#6c123fe14a54142edb2b078dcaba0aae9e693d89"
+source = "git+https://github.com/storytold/craft-libs?rev=6563c88657732babb27b46c5364b813e9178d7fe#6563c88657732babb27b46c5364b813e9178d7fe"
 dependencies = [
  "chrono",
  "dunce",
