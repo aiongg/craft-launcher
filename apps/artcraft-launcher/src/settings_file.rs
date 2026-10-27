@@ -25,7 +25,9 @@ pub fn window_store_path(settings: &Path) -> PathBuf {
 
 /// The window-restore store for the settings file `settings` (an in-memory one without a path).
 /// A store with no placement imports eframe's `"window"` entry from `app.ron`, which older builds
-/// saved there; that entry stays as it is for them.
+/// saved there. Once the store holds a placement the entry is removed: eframe reads it at every
+/// start whatever `persist_window` says, and would maximize or full-screen the window again
+/// over the store. Older builds then open at their default size.
 pub fn open_window_store(settings: Option<&Path>) -> craft_window::restore::Store {
     use craft_window::restore::{MAIN, Store, legacy};
     let Some(settings) = settings else { return Store::in_memory() };
@@ -35,7 +37,23 @@ pub fn open_window_store(settings: Option<&Path>) -> craft_window::restore::Stor
     {
         store.set(MAIN, &placement);
     }
+    if store.get(MAIN).is_some() {
+        drop_eframe_window(settings);
+    }
     store
+}
+
+/// Removes eframe's `"window"` entry from the settings file, leaving the other keys.
+fn drop_eframe_window(settings: &Path) {
+    use eframe::Storage as _;
+    let mut file = RonFile::read(settings);
+    if file.get_string("window").is_none() {
+        return;
+    }
+    file.remove_string("window");
+    if let Err(e) = file.write(settings) {
+        log::warn!("{}: {e}", settings.display());
+    }
 }
 
 /// The settings file inside a portable suite: the same `data` folder `Paths` already uses.
@@ -121,9 +139,8 @@ mod tests {
         }
     }
 
-    /// eframe 0.37's `"window"` entry as it writes it to `app.ron`.
-    const EFRAME_WINDOW: &str =
-        "(inner_position_pixels:Some((x:210.0,y:130.0)),inner_size_points:Some((x:900.0,y:640.0)),maximized:false,fullscreen:false)";
+    /// The `"window"` entry as the fork's egui-winit `WindowSettings` writes it to `app.ron`.
+    const EFRAME_WINDOW: &str = "(normal_geometry:(outer_position_pixels:Some((x:210.0,y:130.0)),scale_factor:1.0,inner_size_points:(x:900.0,y:640.0)),fullscreen:false,maximized:false)";
 
     fn write_window(dir: &Scratch, window: &str) {
         assert!(std::fs::create_dir_all(&dir.0).is_ok());
@@ -146,8 +163,18 @@ mod tests {
         assert_eq!(placement.normal.size, [900.0, 640.0]);
         assert_eq!(placement.position_px, Some([210, 130]));
         assert!(!placement.maximized);
-        // The old entry stays for older builds.
-        assert_eq!(RonFile::read(&dir.file()).0.get("window").map(String::as_str), Some(EFRAME_WINDOW));
+    }
+
+    #[test]
+    fn eframes_window_entry_is_removed_once_the_store_has_the_window() {
+        let dir = Scratch::new("window-entry-dropped");
+        assert!(std::fs::create_dir_all(&dir.0).is_ok());
+        let file = format!("{{\n    \"window\": {EFRAME_WINDOW:?},\n    \"settings\": \"(notify:false)\",\n}}");
+        assert!(std::fs::write(dir.file(), file).is_ok());
+        let _ = open_window_store(Some(&dir.file()));
+        let kept = RonFile::read(&dir.file());
+        assert_eq!(kept.0.get("window"), None);
+        assert_eq!(kept.0.get("settings").map(String::as_str), Some("(notify:false)"));
     }
 
     #[test]

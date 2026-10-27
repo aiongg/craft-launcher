@@ -96,7 +96,7 @@ fn main() -> ExitCode {
         log::warn!("the last self-update didn't install: {error}");
     }
     let (tray_loop, woken) = sync_channel(1);
-    let waker = Arc::new(Waker { window: Mutex::new(None), tray_loop, quit_pending: AtomicBool::new(false) });
+    let waker = Arc::new(Waker { window: Mutex::new(None), tray_loop, quit_pending: AtomicBool::new(false), window_store: OnceLock::new() });
     {
         let waker = waker.clone();
         let _ = wake.set(Box::new(move || waker.wake()));
@@ -130,6 +130,7 @@ fn main() -> ExitCode {
     }
     // One store for every pass: each pass's tracker saves into it, and the next pass opens from it.
     let window_store = Arc::new(Mutex::new(settings_file::open_window_store(settings_path.as_deref())));
+    let _ = waker.window_store.set(window_store.clone());
     // One pass per window: where a window can't hide, closing to the tray ends its pass and the
     // launcher carries on without one until the window is asked for again.
     loop {
@@ -172,8 +173,14 @@ fn main() -> ExitCode {
 /// First-window size and minimum, as `native_options` asks for them. Wayland keeps window
 /// positions from clients, so none is saved or applied there.
 fn window_defaults() -> craft_window::restore::Defaults {
-    craft_window::restore::Defaults::new([1120.0, 760.0], [720.0, 500.0]).with_no_position(WindowBackend::from_env() == WindowBackend::Wayland)
+    // `WAYLAND_DISPLAY` means Wayland only where winit has that backend.
+    let wayland = cfg!(all(unix, not(target_os = "macos"))) && WindowBackend::from_env() == WindowBackend::Wayland;
+    craft_window::restore::Defaults::new(WINDOW_SIZE, WINDOW_MIN).with_no_position(wayland)
 }
+
+/// The size of a first window and the smallest one, in points.
+const WINDOW_SIZE: [f32; 2] = [1120.0, 760.0];
+const WINDOW_MIN: [f32; 2] = [720.0, 500.0];
 
 /// Whether the current window was created with the OS's title bar. macOS cannot switch an open
 /// window between the full-size content view and the OS's bar, so there it stays as created.
@@ -212,8 +219,8 @@ fn native_options(hidden: bool, system_bar: bool) -> eframe::NativeOptions {
     let mut viewport = egui::ViewportBuilder::default()
         .with_title("ArtCraft Launcher")
         .with_app_id(APP_ID)
-        .with_inner_size([1120.0, 760.0])
-        .with_min_inner_size([720.0, 500.0])
+        .with_inner_size(WINDOW_SIZE)
+        .with_min_inner_size(WINDOW_MIN)
         .with_visible(!hidden);
     // The header is the title bar unless the frame policy says otherwise (see `DesktopHost::title_bar`).
     CREATED_WITH_SYSTEM_BAR.store(system_bar, Ordering::Relaxed);
@@ -396,6 +403,8 @@ struct Waker {
     tray_loop: SyncSender<()>,
     /// Quit was picked in the tray and no tick has taken it up yet.
     quit_pending: AtomicBool,
+    /// The window-restore store, saved before a tray Quit exits without a window pass.
+    window_store: OnceLock<Arc<Mutex<craft_window::restore::Store>>>,
 }
 
 /// How long a tray Quit may wait for the window to take it up before the launcher exits anyway.
@@ -418,6 +427,9 @@ impl Waker {
             std::thread::sleep(QUIT_GRACE);
             if waker.quit_unseen() {
                 log::warn!("the window did not answer a quit from the tray: exiting");
+                if let Some(store) = waker.window_store.get() {
+                    let _ = store.lock().unwrap_or_else(PoisonError::into_inner).save();
+                }
                 std::process::exit(0);
             }
         });
@@ -1255,7 +1267,7 @@ mod tests {
     #[test]
     fn a_tray_quit_nobody_took_up_ends_the_launcher() {
         let (tray_loop, _woken) = sync_channel(1);
-        let waker = Waker { window: Mutex::new(None), tray_loop, quit_pending: AtomicBool::new(true) };
+        let waker = Waker { window: Mutex::new(None), tray_loop, quit_pending: AtomicBool::new(true), window_store: OnceLock::new() };
         assert!(waker.quit_unseen());
         assert!(!waker.quit_unseen());
         waker.quit_pending.store(true, Ordering::SeqCst);
