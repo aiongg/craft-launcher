@@ -187,12 +187,30 @@ mod tests {
 
         let new = Scratch::new("appearance-new");
         let mut appearance = AppAppearance::follow_suite();
-        appearance.own = Some(Selection { theme: ThemeId::parse("craft.graphite").unwrap(), mode: Mode::Light });
+        appearance.own_pick = Some(Selection { theme: ThemeId::parse("craft.graphite").unwrap(), mode: Mode::Light });
         appearance.last_suite =
             craft_theme_store::Accepted::from_selection(Selection { theme: ThemeId::parse("craft.high-contrast").unwrap(), mode: Mode::System });
         appearance.last_suite.revision = 7;
         let settings = Settings { appearance: Some(appearance), theme: ThemeChoice::Dark, ..Settings::default() };
         assert_eq!(save(&new.file(), "settings", &settings), Ok(()));
         assert_eq!(restored(&new.file()), settings, "a restart keeps the appearance as saved");
+    }
+
+    /// Settings from an earlier pilot build keep the own choice under `own`, which this build
+    /// doesn't read: everything else still loads, and the launcher follows the suite.
+    #[test]
+    fn an_earlier_pilot_appearance_keeps_the_other_settings() {
+        use artcraft_launcher_ui_egui::settings::SortKey;
+        let dir = Scratch::new("appearance-pilot");
+        write_settings(
+            &dir,
+            r#"(language:"de",sort:Name,hidden:["photocraft"],appearance:Some((follow_suite:false,own:(theme:"craft.graphite",mode:light),last_suite:(suite:(theme:None,mode:None),revision:0,library_revision:0))))"#,
+        );
+        let settings = restored(&dir.file());
+        assert_eq!(settings.language, "de");
+        assert_eq!(settings.sort, SortKey::Name);
+        assert_eq!(settings.hidden.iter().map(String::as_str).collect::<Vec<_>>(), ["photocraft"]);
+        let appearance = settings.appearance();
+        assert_eq!((appearance.follow_suite, appearance.own_pick), (true, None));
     }
 }

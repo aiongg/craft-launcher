@@ -98,25 +98,22 @@ impl LauncherUi {
     pub(crate) fn suite_notices(&mut self, ui: &mut Ui) {
         let tokens = Tokens::get(ui.ctx());
         let client = &self.suite.client;
-        let notice = if client.conflict().is_some() {
-            Some((t("Changed in another Craft app; your choice wasn't applied").to_string(), t("Apply mine")))
-        } else {
-            client.failure().map(|(_, e)| (fmt(t("Couldn't change the suite theme: {e}"), &[("e", &e.to_string())]), t("Retry")))
-        };
+        let conflict = client.conflict().is_some();
+        let failure = client.failure().map(|(_, e)| fmt(t("Couldn't change the suite theme: {e}"), &[("e", &e.to_string())]));
         let problems: Vec<String> = client.problems().iter().map(ToString::to_string).collect();
-        if let Some((text, action)) = notice {
-            ui.add_space(6.0);
-            ui.add(egui::Label::new(RichText::new(text).size(12.0).color(tokens.warn)).wrap());
-            ui.horizontal(|ui| {
-                if widgets::button(ui, action, Kind::Secondary, 0.0).clicked() {
-                    // Only one of the two is set; each does nothing without its notice.
-                    self.suite.client.apply_mine();
-                    self.suite.client.retry();
-                }
-                if widgets::button(ui, t("Dismiss"), Kind::Secondary, 0.0).clicked() {
-                    self.suite.client.dismiss();
-                }
-            });
+        if conflict {
+            match notice(ui, &tokens, t("Changed in another Craft app; your choice wasn't applied"), t("Apply mine")) {
+                Some(Answer::Act) => self.suite.client.apply_mine(),
+                Some(Answer::Dismiss) => self.suite.client.dismiss(),
+                None => {}
+            }
+        }
+        if let Some(text) = failure {
+            match notice(ui, &tokens, &text, t("Retry")) {
+                Some(Answer::Act) => self.suite.client.retry(),
+                Some(Answer::Dismiss) => self.suite.client.dismiss(),
+                None => {}
+            }
         }
         if !problems.is_empty() {
             ui.add_space(6.0);
@@ -124,4 +121,29 @@ impl LauncherUi {
             ui.add(egui::Label::new(RichText::new(&line).size(12.0).color(tokens.muted)).truncate()).on_hover_text(line);
         }
     }
+}
+
+/// What the user clicked under a notice.
+enum Answer {
+    Act,
+    Dismiss,
+}
+
+/// A notice: a warning marker, its text in body ink, its action and Dismiss.
+fn notice(ui: &mut Ui, tokens: &Tokens, text: &str, action: &str) -> Option<Answer> {
+    ui.add_space(6.0);
+    ui.horizontal_top(|ui| {
+        ui.label(RichText::new("⚠").size(12.0).color(tokens.warn));
+        ui.add(egui::Label::new(RichText::new(text).size(12.0).color(tokens.ink)).wrap());
+    });
+    ui.horizontal(|ui| {
+        if widgets::button(ui, action, Kind::Secondary, 0.0).clicked() {
+            Some(Answer::Act)
+        } else if widgets::button(ui, t("Dismiss"), Kind::Secondary, 0.0).clicked() {
+            Some(Answer::Dismiss)
+        } else {
+            None
+        }
+    })
+    .inner
 }

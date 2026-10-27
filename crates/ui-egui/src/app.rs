@@ -1336,7 +1336,7 @@ mod tests {
 
         let mut appearance = launcher.settings.appearance();
         appearance.follow_suite = false;
-        appearance.own = Some(Selection { theme: ThemeId::app_default(), mode: Mode::Light });
+        appearance.own_pick = Some(Selection { theme: ThemeId::app_default(), mode: Mode::Light });
         launcher.settings.appearance = Some(appearance);
         assert_eq!(drawn_tokens(&mut launcher, &ctx, 0.3), Tokens::LIGHT, "a fixed Light puts the light palette in the dark slot too");
         assert_eq!(launcher.settings.theme, theme::ThemeChoice::Light, "older builds read the mode in use");
@@ -1345,7 +1345,7 @@ mod tests {
         appearance.follow_suite = true;
         launcher.settings.appearance = Some(appearance);
         assert_eq!(drawn_tokens(&mut launcher, &ctx, 0.4), builtin_tokens("craft.graphite", Variant::Dark));
-        assert_eq!(launcher.settings.appearance().own.map(|own| own.mode), Some(Mode::Light));
+        assert_eq!(launcher.settings.appearance().own_pick.map(|own| own.mode), Some(Mode::Light));
     }
 
     /// The files in `dir` and below, with their bytes; empty when it doesn't exist.
@@ -1483,7 +1483,7 @@ mod tests {
         );
         h.run_steps(4);
         let before = Tokens::get(&h.ctx);
-        assert_eq!(h.state().as_ref().unwrap().settings.appearance().own, None);
+        assert_eq!(h.state().as_ref().unwrap().settings.appearance().own_pick, None);
         h.get_by_label("Settings").click();
         h.run_steps(4);
         h.get_by_label("This app only").scroll_to_me();
@@ -1492,7 +1492,7 @@ mod tests {
         h.run_steps(3);
         let appearance = h.state().as_ref().unwrap().settings.appearance();
         assert!(!appearance.follow_suite);
-        assert_eq!(appearance.own, Some(Selection { theme: graphite, mode: Mode::Light }));
+        assert_eq!(appearance.own_pick, Some(Selection { theme: graphite, mode: Mode::Light }));
         assert_eq!(Tokens::get(&h.ctx), before, "the look stayed");
     }
 }

@@ -26,7 +26,7 @@ pub struct AppAppearance {
     /// turning the override back on restores it. `None` until one is chosen: switching to "This
     /// app only" then starts from what is shown.
     #[serde(default)]
-    pub own: Option<Selection>,
+    pub own_pick: Option<Selection>,
     /// The suite selection as last seen, shown while the suite folder can't be read.
     #[serde(default)]
     pub last_suite: Accepted,
@@ -35,12 +35,12 @@ pub struct AppAppearance {
 impl AppAppearance {
     /// A fresh install: follow the suite, with no own choice yet.
     pub fn follow_suite() -> Self {
-        Self { follow_suite: true, own: None, last_suite: Accepted::default() }
+        Self { follow_suite: true, own_pick: None, last_suite: Accepted::default() }
     }
 
     /// The launcher's own choice.
     pub fn own(own: Selection) -> Self {
-        Self { follow_suite: false, own: Some(own), last_suite: Accepted::default() }
+        Self { follow_suite: false, own_pick: Some(own), last_suite: Accepted::default() }
     }
 
     /// The launcher's own palette in `theme`'s mode; also what settings saved before suite themes become.
@@ -50,7 +50,7 @@ impl AppAppearance {
 
     /// The launcher's own choice when it has one and doesn't follow the suite.
     pub fn own_choice(&self) -> Option<&Selection> {
-        self.own.as_ref().filter(|_| !self.follow_suite)
+        self.own_pick.as_ref().filter(|_| !self.follow_suite)
     }
 
     pub fn choice(&self) -> AppChoice {
@@ -190,14 +190,17 @@ impl Settings {
     /// Machine-readable code for "follow the system language".
     pub const LANGUAGE_AUTO: &str = "auto";
 
-    /// Clear saved catalog filters whose controls were removed from the toolbar,
-    /// and give settings saved before suite themes their old look.
+    /// Clear saved catalog filters whose controls were removed from the toolbar, give settings
+    /// saved before suite themes their old look, and follow the suite where no own choice is kept.
     pub fn migrate(&mut self) {
         if !matches!(self.filter, Filter::All | Filter::Hidden) {
             self.filter = Filter::All;
         }
-        if self.appearance.is_none() {
-            self.appearance = Some(AppAppearance::launcher_default(self.theme));
+        match &mut self.appearance {
+            None => self.appearance = Some(AppAppearance::launcher_default(self.theme)),
+            // "This app only" with no own choice draws the suite's theme; say so in Settings too.
+            Some(appearance) if appearance.own_pick.is_none() => appearance.follow_suite = true,
+            Some(_) => {}
         }
     }
 

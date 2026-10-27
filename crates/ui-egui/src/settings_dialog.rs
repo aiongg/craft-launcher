@@ -393,8 +393,8 @@ impl LauncherUi {
         if follow != appearance.follow_suite {
             appearance.follow_suite = follow;
             // The first own choice is what is shown now, so switching doesn't change the look.
-            if !follow && appearance.own.is_none() {
-                appearance.own = Some(shown);
+            if !follow && appearance.own_pick.is_none() {
+                appearance.own_pick = Some(shown);
             }
         } else if following {
             let change = SelectionChange { theme: picked, mode };
@@ -404,7 +404,7 @@ impl LauncherUi {
         } else if picked.is_some() || mode.is_some() {
             // A launcher-only choice starts from what is shown, so the look changes only where asked.
             appearance.follow_suite = false;
-            appearance.own = Some(Selection { theme: picked.unwrap_or(shown.theme), mode: mode.unwrap_or(shown.mode) });
+            appearance.own_pick = Some(Selection { theme: picked.unwrap_or(shown.theme), mode: mode.unwrap_or(shown.mode) });
         }
         self.settings.appearance = Some(appearance);
     }
