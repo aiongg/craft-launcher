@@ -5,8 +5,57 @@ use std::collections::BTreeMap;
 use artcraft_launcher_core::PackageKind;
 use serde::{Deserialize, Serialize};
 
+use craft_theme::{AppChoice, AppDefaults, Mode, Selection, ThemeId};
+use craft_theme_store::{Accepted, SuiteChoice};
+
 use crate::i18n::t;
 use crate::theme::ThemeChoice;
+
+/// What the launcher shows while it follows the suite and nobody has picked a suite theme or
+/// mode yet: ArtCraft, dark.
+pub fn app_defaults() -> AppDefaults {
+    AppDefaults { theme: ThemeId::suite_default(), mode: Mode::Dark }
+}
+
+/// The launcher's appearance: follow the suite's theme, or use one of its own.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct AppAppearance {
+    /// "Follow suite": the theme and mode chosen in any Craft app that follows the suite.
+    pub follow_suite: bool,
+    /// "This app only": the launcher's own theme and mode, kept while it follows the suite so
+    /// turning the override back on restores it.
+    pub own: Selection,
+    /// The suite selection as last seen, shown while the suite folder can't be read.
+    #[serde(default)]
+    pub last_suite: Accepted,
+}
+
+impl AppAppearance {
+    /// A fresh install: follow the suite; the own choice starts at what the suite shows by default.
+    pub fn follow_suite() -> Self {
+        Self { follow_suite: true, own: app_defaults().selection(), last_suite: Accepted::default() }
+    }
+
+    /// The launcher's own choice.
+    pub fn own(own: Selection) -> Self {
+        Self { follow_suite: false, own, last_suite: Accepted::default() }
+    }
+
+    /// The launcher's own palette in `theme`'s mode; also what settings saved before suite themes become.
+    pub fn launcher_default(theme: ThemeChoice) -> Self {
+        Self::own(Selection { theme: ThemeId::app_default(), mode: theme.into() })
+    }
+
+    pub fn choice(&self) -> AppChoice {
+        if self.follow_suite { AppChoice::FollowSuite } else { AppChoice::Own(self.own.clone()) }
+    }
+
+    /// The theme and mode to draw, given the suite's choice.
+    pub fn effective(&self, suite: &SuiteChoice) -> Selection {
+        let defaults = app_defaults();
+        self.choice().effective(Some(&suite.with_defaults(&defaults)), &defaults)
+    }
+}
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub enum ViewMode {
@@ -92,7 +141,13 @@ pub struct Settings {
     pub filter: Filter,
     pub sort: SortKey,
     pub sort_descending: bool,
+    /// The appearance mode as builds before suite themes read it; written with the mode in use.
     pub theme: ThemeChoice,
+    /// `None` only in settings saved before suite themes, which [`Settings::migrate`] turns into
+    /// the launcher's own palette in the saved `theme`. Settings that were never saved hold
+    /// [`AppAppearance::follow_suite`].
+    #[serde(default)]
+    pub appearance: Option<AppAppearance>,
     /// Interface language: `auto` (follow the system) or a language code from the registry
     /// (`en`, `ru`, `zh-CN`, `de`, `fr`, `pt-BR`, `pl`).
     pub language: String,
@@ -128,11 +183,20 @@ impl Settings {
     /// Machine-readable code for "follow the system language".
     pub const LANGUAGE_AUTO: &str = "auto";
 
-    /// Clear saved catalog filters whose controls were removed from the toolbar.
+    /// Clear saved catalog filters whose controls were removed from the toolbar,
+    /// and give settings saved before suite themes their old look.
     pub fn migrate(&mut self) {
         if !matches!(self.filter, Filter::All | Filter::Hidden) {
             self.filter = Filter::All;
         }
+        if self.appearance.is_none() {
+            self.appearance = Some(AppAppearance::launcher_default(self.theme));
+        }
+    }
+
+    /// The appearance, migrated if need be.
+    pub fn appearance(&self) -> AppAppearance {
+        self.appearance.clone().unwrap_or_else(|| AppAppearance::launcher_default(self.theme))
     }
 
     /// Display name for a language `code`: a language's name in itself, from the registry
@@ -190,6 +254,7 @@ impl Default for Settings {
             sort: SortKey::Suite,
             sort_descending: false,
             theme: ThemeChoice::System,
+            appearance: Some(AppAppearance::follow_suite()),
             language: "auto".to_string(),
             close_to_tray: true,
             show_on_current_desktop: true,

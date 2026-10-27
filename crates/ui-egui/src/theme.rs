@@ -4,6 +4,9 @@
 
 use std::sync::Arc;
 
+pub use craft_theme::{Mode, Selection, SuiteTheme, ThemeId, Variant};
+use craft_theme::{Resolution, Resolved, Rgba};
+use craft_ui::theme::color32;
 use egui::epaint::text::VariationCoords;
 use egui::{Color32, CornerRadius, FontData, FontDefinitions, FontFamily, FontId, FontTweak, Stroke, TextStyle, Visuals};
 use serde::{Deserialize, Serialize};
@@ -30,6 +33,50 @@ impl ThemeChoice {
             Self::System => crate::i18n::t("Match system"),
             Self::Dark => crate::i18n::t("Dark"),
             Self::Light => crate::i18n::t("Light"),
+        }
+    }
+}
+
+/// "Follow suite" (`true`) or "This app only" (`false`).
+pub fn scope_label(follow_suite: bool) -> &'static str {
+    if follow_suite { crate::i18n::t("Follow suite") } else { crate::i18n::t("This app only") }
+}
+
+/// What following the suite, or not, means.
+pub fn scope_tip(follow_suite: bool) -> &'static str {
+    if follow_suite {
+        crate::i18n::t("Changes here apply to every Craft app that follows the suite")
+    } else {
+        crate::i18n::t("The theme and mode chosen here apply to ArtCraft Launcher only")
+    }
+}
+
+/// A built-in suite theme's name in the UI language.
+pub fn theme_name(name: &str) -> &str {
+    crate::i18n::t(name)
+}
+
+/// The launcher's own palette, as a theme choice.
+pub fn app_default_name() -> &'static str {
+    crate::i18n::t("Launcher default")
+}
+
+impl From<ThemeChoice> for Mode {
+    fn from(choice: ThemeChoice) -> Self {
+        match choice {
+            ThemeChoice::System => Mode::System,
+            ThemeChoice::Dark => Mode::Dark,
+            ThemeChoice::Light => Mode::Light,
+        }
+    }
+}
+
+impl From<Mode> for ThemeChoice {
+    fn from(mode: Mode) -> Self {
+        match mode {
+            Mode::System => ThemeChoice::System,
+            Mode::Dark => ThemeChoice::Dark,
+            Mode::Light => ThemeChoice::Light,
         }
     }
 }
@@ -115,6 +162,49 @@ impl Tokens {
         warn: hex(0x8a5800),
         bad: hex(0xb3261e),
     };
+
+    /// The launcher's own palette ("Launcher default", `craft.app-default`) in `variant`.
+    pub fn app_default(variant: Variant) -> Self {
+        match variant {
+            Variant::Dark => Self::DARK,
+            Variant::Light => Self::LIGHT,
+        }
+    }
+
+    /// The tokens for a suite theme: its core roles and derived states mapped onto the launcher's
+    /// names.
+    pub fn from_resolved(r: &Resolved) -> Self {
+        let (roles, derived) = (&r.roles, &r.derived);
+        let dark = r.variant == Variant::Dark;
+        // Headings: the body text pushed halfway to pure white (dark) or black (light).
+        let extreme = if dark { Rgba::WHITE } else { Rgba::BLACK };
+        Self {
+            dark,
+            bg: color32(roles.background),
+            sunken: color32(roles.surface),
+            ink: color32(roles.text),
+            ink_strong: color32(roles.text.lerp_gamma(extreme, 0.5)),
+            muted: color32(roles.text_muted),
+            faint: color32(derived.text_faint),
+            line: color32(roles.line),
+            line_strong: color32(derived.control_edge),
+            accent: color32(roles.accent),
+            accent_ink: color32(derived.accent_text),
+            invert_bg: color32(roles.text),
+            invert_fg: color32(roles.background),
+            good: color32(roles.good),
+            warn: color32(roles.warn),
+            bad: color32(roles.bad),
+        }
+    }
+
+    /// The tokens for a resolution: the suite theme's, or the launcher's own palette.
+    pub fn for_resolution(resolution: &Resolution) -> Self {
+        match resolution {
+            Resolution::Theme(r) => Self::from_resolved(r),
+            Resolution::AppDefault { variant, .. } => Self::app_default(*variant),
+        }
+    }
 
     /// The tokens [`install`] stored for the slot egui is drawing with. Both slots can hold the
     /// same variant, so this reads the stored set and never derives one from `ctx.theme()` alone.
@@ -245,22 +335,34 @@ fn slot_style(mut style: egui::Style, t: &Tokens) -> egui::Style {
 /// on the system answer, so egui switches between the slots without a rebuild; with no answer it
 /// falls back to the dark slot.
 pub fn install(ctx: &egui::Context, light: Tokens, dark: Tokens) {
-    for (theme, tokens) in [(egui::Theme::Light, &light), (egui::Theme::Dark, &dark)] {
-        ctx.set_style_of(theme, slot_style((*ctx.style_of(theme)).clone(), tokens));
-    }
+    let light_style = slot_style((*ctx.style_of(egui::Theme::Light)).clone(), &light);
+    let dark_style = slot_style((*ctx.style_of(egui::Theme::Dark)).clone(), &dark);
     ctx.data_mut(|d| d.insert_temp(egui::Id::unique(SLOT_TOKENS_KEY), SlotTokens { light, dark }));
-    ctx.options_mut(|o| o.fallback_theme = egui::Theme::Dark);
-    ctx.set_theme(egui::ThemePreference::System);
+    ctx.options_mut(|o| o.fallback_theme = FALLBACK_THEME);
+    craft_ui::theme::install(ctx, light_style, dark_style);
 }
 
-/// Applies the user's choice: "Match system" gives each slot its own variant, a fixed choice
-/// gives both slots that variant.
+/// The variant drawn when the mode follows the system and the OS gives no answer.
+pub const FALLBACK_VARIANT: Variant = Variant::Dark;
+const FALLBACK_THEME: egui::Theme = egui::Theme::Dark;
+
+/// The token sets for egui's light and dark slots under `sel`. Following the system, each slot
+/// gets its own variant; a fixed mode (or a theme with one variant) puts the same one in both.
+pub fn slot_tokens(sel: &Selection, lookup: &dyn Fn(&ThemeId) -> Option<SuiteTheme>) -> (Tokens, Tokens) {
+    let slot = |os: Variant| Tokens::for_resolution(&craft_theme::resolve(sel, Some(os), FALLBACK_VARIANT, lookup));
+    (slot(Variant::Light), slot(Variant::Dark))
+}
+
+/// Installs the styles for `sel`, a theme and a mode; `lookup` finds suite themes by id.
+pub fn install_selection(ctx: &egui::Context, sel: &Selection, lookup: &dyn Fn(&ThemeId) -> Option<SuiteTheme>) {
+    let (light, dark) = slot_tokens(sel, lookup);
+    install(ctx, light, dark);
+}
+
+/// Applies the launcher's own palette in the mode `choice`: "Match system" gives each slot its
+/// own variant, a fixed choice gives both slots that variant.
 pub fn apply(ctx: &egui::Context, choice: ThemeChoice) {
-    match choice {
-        ThemeChoice::System => install(ctx, Tokens::LIGHT, Tokens::DARK),
-        ThemeChoice::Dark => install(ctx, Tokens::DARK, Tokens::DARK),
-        ThemeChoice::Light => install(ctx, Tokens::LIGHT, Tokens::LIGHT),
-    }
+    install_selection(ctx, &Selection { theme: ThemeId::app_default(), mode: choice.into() }, &craft_theme::lookup_builtin);
 }
 
 /// Height of buttons, inputs and filter cells (the site's medium button).

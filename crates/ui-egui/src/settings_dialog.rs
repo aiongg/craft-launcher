@@ -8,8 +8,9 @@ use crate::app::{Host, LauncherUi};
 use crate::i18n::fmt;
 use crate::settings::{CheckEvery, Settings};
 use crate::sheet;
-use crate::theme::{self, ThemeChoice, Tokens};
+use crate::theme::{self, Mode, Selection, ThemeChoice, ThemeId, Tokens};
 use crate::widgets::{self, Cell, Kind};
+use craft_theme_store::{SelectionChange, ThemeEntry};
 
 /// A label with its control at the right; the control drops under the label when they don't fit.
 ///
@@ -348,13 +349,70 @@ impl LauncherUi {
         });
     }
 
+    /// "Follow suite" or "This app only" (where the suite folder is shared), the theme and the
+    /// mode. While following, a theme or mode picked here is the suite's, for every Craft app that
+    /// follows it; otherwise it is the launcher's own.
     fn settings_appearance(&mut self, ui: &mut Ui) {
-        let mut theme_choice = self.settings.theme;
+        self.rescan_suite_library();
+        let index = self.suite.watch.snapshot().index.clone();
+        let mut appearance = self.settings.appearance();
+        let shown = self.effective_appearance();
+        let following = appearance.follow_suite && self.suite.shared;
+        let themes = theme_options(&index);
+        let mut picked_theme = themes.iter().position(|(id, _)| *id == shown.theme).unwrap_or(usize::MAX);
+        let mut mode = ThemeChoice::from(shown.mode);
+        let mut follow = appearance.follow_suite;
         sheet::panel(ui, tl!("Appearance"), |ui| {
+            if self.suite.shared {
+                ui.horizontal(|ui| {
+                    widgets::cells(
+                        ui,
+                        &mut follow,
+                        &[true, false].map(|f| (f, Cell { label: theme::scope_label(f), tip: theme::scope_tip(f), count: None })),
+                    );
+                });
+                if follow {
+                    note(ui, theme::scope_tip(true));
+                }
+                ui.add_space(6.0);
+            }
+            ui.horizontal_wrapped(|ui| {
+                let cells: Vec<(usize, Cell<'_>)> =
+                    themes.iter().enumerate().map(|(i, (_, name))| (i, Cell { label: name.as_str(), tip: name.as_str(), count: None })).collect();
+                widgets::cells(ui, &mut picked_theme, &cells);
+            });
+            ui.add_space(6.0);
             ui.horizontal(|ui| {
-                widgets::cells(ui, &mut theme_choice, &ThemeChoice::ALL.map(|c| (c, Cell { label: c.label(), tip: c.label(), count: None })));
+                widgets::cells(ui, &mut mode, &ThemeChoice::ALL.map(|c| (c, Cell { label: c.label(), tip: c.label(), count: None })));
             });
         });
-        self.settings.theme = theme_choice;
+        let picked = themes.into_iter().nth(picked_theme).map(|(id, _)| id).filter(|id| *id != shown.theme);
+        let mode = Some(Mode::from(mode)).filter(|m| *m != shown.mode);
+        if follow != appearance.follow_suite {
+            appearance.follow_suite = follow;
+        } else if following {
+            let change = SelectionChange { theme: picked, mode };
+            if !change.is_empty() {
+                self.change_suite(change);
+            }
+        } else {
+            // A launcher-only choice starts from what is shown, so the look changes only where asked.
+            if picked.is_some() || mode.is_some() {
+                appearance.follow_suite = false;
+                appearance.own = Selection { theme: picked.unwrap_or(shown.theme), mode: mode.unwrap_or(shown.mode) };
+            }
+        }
+        self.settings.appearance = Some(appearance);
     }
+}
+
+/// The themes on offer, by id and name: the built-ins (ArtCraft first), the launcher's own
+/// palette, then the library's.
+fn theme_options(library: &[ThemeEntry]) -> Vec<(ThemeId, String)> {
+    let mut themes: Vec<(ThemeId, String)> = craft_theme::builtins().iter().map(|t| (t.id.clone(), theme::theme_name(&t.name).to_string())).collect();
+    themes.push((ThemeId::app_default(), theme::app_default_name().to_string()));
+    let mut user: Vec<&ThemeEntry> = library.iter().filter(|e| !e.id.is_builtin()).collect();
+    user.sort_by(|a, b| a.name.cmp(&b.name).then_with(|| a.id.as_str().cmp(b.id.as_str())));
+    themes.extend(user.into_iter().map(|e| (e.id.clone(), e.name.clone())));
+    themes
 }

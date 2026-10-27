@@ -121,11 +121,11 @@ fn harness_language(
                 && let Some(b) = backend.take()
             {
                 let mut s = settings.clone();
-                s.theme = if theme == egui::Theme::Dark {
+                s.appearance = Some(artcraft_launcher_ui_egui::AppAppearance::launcher_default(if theme == egui::Theme::Dark {
                     artcraft_launcher_ui_egui::theme::ThemeChoice::Dark
                 } else {
                     artcraft_launcher_ui_egui::theme::ThemeChoice::Light
-                };
+                }));
                 *state = Some(LauncherUi::new(ui.ctx(), Box::new(b), s));
             }
             if let Some(l) = state.as_mut() {

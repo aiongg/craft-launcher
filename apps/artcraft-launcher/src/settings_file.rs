@@ -151,4 +151,48 @@ mod tests {
         assert!(std::fs::write(dir.file(), "not ron {").is_ok());
         assert_eq!(load::<Settings>(&dir.file(), "settings"), None);
     }
+
+    /// Writes eframe's file with `settings` as the saved RON under the settings key.
+    fn write_settings(dir: &Scratch, settings: &str) {
+        assert!(std::fs::create_dir_all(&dir.0).is_ok());
+        assert!(std::fs::write(dir.file(), format!("{{\n    \"settings\": {settings:?},\n}}")).is_ok());
+    }
+
+    /// What the shell shows after loading: saved settings migrated, or the defaults when there
+    /// are none (as `Launcher::start` does).
+    fn restored(path: &Path) -> Settings {
+        let mut settings = load::<Settings>(path, "settings").unwrap_or_default();
+        settings.migrate();
+        settings
+    }
+
+    /// Fresh installs follow the suite; settings saved before suite themes keep the launcher's own
+    /// palette in their saved mode; settings with an appearance keep it.
+    #[test]
+    fn the_appearance_migrates_from_fresh_legacy_and_new_settings() {
+        use artcraft_launcher_ui_egui::AppAppearance;
+        use artcraft_launcher_ui_egui::theme::{Mode, Selection, ThemeChoice, ThemeId};
+
+        let fresh = Scratch::new("appearance-fresh");
+        assert_eq!(restored(&fresh.file()).appearance, Some(AppAppearance::follow_suite()));
+
+        let legacy = Scratch::new("appearance-legacy");
+        write_settings(&legacy, "(theme:Light,notify:false)");
+        let settings = restored(&legacy.file());
+        let own = Selection { theme: ThemeId::app_default(), mode: Mode::Light };
+        assert_eq!(settings.appearance, Some(AppAppearance::own(own)));
+        assert!(!settings.notify);
+        write_settings(&legacy, "(notify:false)");
+        assert_eq!(restored(&legacy.file()).appearance, Some(AppAppearance::launcher_default(ThemeChoice::System)));
+
+        let new = Scratch::new("appearance-new");
+        let mut appearance = AppAppearance::follow_suite();
+        appearance.own = Selection { theme: ThemeId::parse("craft.graphite").unwrap(), mode: Mode::Light };
+        appearance.last_suite =
+            craft_theme_store::Accepted::from_selection(Selection { theme: ThemeId::parse("craft.high-contrast").unwrap(), mode: Mode::System });
+        appearance.last_suite.revision = 7;
+        let settings = Settings { appearance: Some(appearance), theme: ThemeChoice::Dark, ..Settings::default() };
+        assert_eq!(save(&new.file(), "settings", &settings), Ok(()));
+        assert_eq!(restored(&new.file()), settings, "a restart keeps the appearance as saved");
+    }
 }

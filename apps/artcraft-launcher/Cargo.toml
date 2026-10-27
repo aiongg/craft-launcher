@@ -30,6 +30,8 @@ notify-rust = "4"
 # Cargo.lock through eframe's "persistence" feature.
 ron = "0.12.2"
 serde = { workspace = true }
+# The shared suite theme folder, watched for the UI.
+craft-theme-store = { workspace = true }
 craft-quit = { version = "0.1.0", git = "https://github.com/storytold/craft-libs", rev = "6563c88657732babb27b46c5364b813e9178d7fe", features = ["egui"] }
 
 # The tray (menu bar) icon. On Linux and the BSDs the StatusNotifierItem backend talks D-Bus

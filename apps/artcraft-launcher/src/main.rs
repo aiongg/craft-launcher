@@ -107,6 +107,8 @@ fn main() -> ExitCode {
     let backend_waker = waker.clone();
     let settings_path = settings_file::path(APP_ID);
     let mut launcher = Launcher::new(Box::new(NativeBackend::new(move || backend_waker.wake())), starts, settings_path.clone());
+    // The suite theme folder the other Craft apps share; a portable suite keeps to itself.
+    launcher.suite_dir = craft_theme_store::SuiteDir::resolve(artcraft_launcher_native::paths::portable_root().is_some());
     #[cfg(all(unix, not(target_os = "macos")))]
     {
         let theme_waker = waker.clone();
@@ -563,6 +565,9 @@ struct Launcher {
     closed_to_tray: bool,
     /// eframe's settings file, which the launcher writes itself while there is no window.
     settings_path: Option<PathBuf>,
+    /// Where the suite's theme selection lives, watched once the saved settings are in. In
+    /// memory unless `main` sets the shared folder, so tests never touch it.
+    suite_dir: craft_theme_store::SuiteDir,
     waker: Option<Arc<Waker>>,
 }
 
@@ -585,6 +590,7 @@ impl Launcher {
             started: false,
             closed_to_tray: false,
             settings_path,
+            suite_dir: craft_theme_store::SuiteDir::memory(),
             waker: None,
         }
     }
@@ -596,6 +602,7 @@ impl Launcher {
         if let Some(settings) = settings {
             self.restore_saved_settings(settings);
         }
+        self.watch_suite(waker);
         self.waker = Some(waker.clone());
         let (wake, on_quit) = (waker.clone(), waker.clone());
         match tray::Tray::new(move || wake.wake(), move || on_quit.quit_from_tray()) {
@@ -603,6 +610,16 @@ impl Launcher {
             Err(e) => log::warn!("no tray icon: {e}"),
         }
         self.host.tray = self.tray.is_some();
+    }
+
+    /// Watches the suite's theme selection. The tray keeps it running; a change shows when the
+    /// window opens.
+    fn watch_suite(&mut self, waker: &Arc<Waker>) {
+        let options = craft_theme_store::StoreOptions::new(concat!("artcraft-launcher ", env!("CARGO_PKG_VERSION")))
+            .last_accepted(self.ui.settings.appearance().last_suite);
+        let wake = waker.clone();
+        let watch = craft_theme_store::SuiteWatch::open(&self.suite_dir, options, move || wake.wake());
+        self.ui.set_suite(watch, !self.suite_dir.is_memory());
     }
 
     fn restore_saved_settings(&mut self, mut settings: Settings) {

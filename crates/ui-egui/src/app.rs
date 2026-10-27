@@ -159,7 +159,8 @@ pub struct LauncherUi {
     /// The details pictures the backend has sent (or been asked for), by app and picture key.
     pub(crate) pictures: std::collections::HashMap<(String, String), crate::details::Picture>,
     started: bool,
-    applied_theme: Option<theme::ThemeChoice>,
+    /// The suite's theme selection and what the installed styles were built for.
+    pub(crate) suite: crate::appearance::Suite,
     /// The OS asks for fewer animations: what the host last said, and the context's time to ask
     /// it again at.
     pub(crate) reduce_motion: bool,
@@ -255,7 +256,7 @@ impl LauncherUi {
             detail_zoom: false,
             pictures: std::collections::HashMap::new(),
             started: false,
-            applied_theme: None,
+            suite: crate::appearance::Suite::new(craft_theme_store::SuiteWatch::memory(), false),
             reduce_motion: false,
             motion_recheck: 0.0,
             applied_motion: None,
@@ -281,8 +282,7 @@ impl LauncherUi {
         egui_extras::install_image_loaders(ctx);
         self.fonts_ready = false;
         // Installed now, so the window's first clear colour already comes from the launcher's style.
-        theme::apply(ctx, self.settings.theme);
-        self.applied_theme = Some(self.settings.theme);
+        self.sync_appearance(ctx, true);
         self.applied_motion = None;
         self.motion_recheck = 0.0;
         self.toasts.clear();
@@ -757,10 +757,10 @@ impl LauncherUi {
         // becomes active next pass, so drawing with it in the pass that installed it would panic.
         set_current(drawable_lang(&self.settings.language, self.cjk_font));
         self.zoom_input(&ctx);
-        if self.applied_theme != Some(self.settings.theme) {
-            theme::apply(&ctx, self.settings.theme);
-            self.applied_theme = Some(self.settings.theme);
+        if !matches!(self.dialog, Some(Dialog::Settings)) {
+            self.suite.rescanned = false;
         }
+        self.sync_appearance(&ctx, false);
         let now = ctx.input(|i| i.time);
         if now >= self.motion_recheck {
             self.reduce_motion = host.reduce_motion();
@@ -1302,5 +1302,49 @@ mod tests {
         use crate::i18n::Lang;
         let _guard = crate::i18n::StrictCjkDrawing::on(None);
         let _ = crate::i18n::tr(Lang::ZH_CN, "Settings");
+    }
+
+    /// The Dark slot's tokens (no OS answer: the fallback) after one more pass.
+    fn drawn_tokens(launcher: &mut LauncherUi, ctx: &egui::Context, time: f64) -> Tokens {
+        frame(launcher, ctx, time);
+        Tokens::get(ctx)
+    }
+
+    fn builtin_tokens(id: &str, variant: craft_theme::Variant) -> Tokens {
+        let sel = craft_theme::Selection {
+            theme: craft_theme::ThemeId::parse(id).unwrap(),
+            mode: if variant == craft_theme::Variant::Dark { craft_theme::Mode::Dark } else { craft_theme::Mode::Light },
+        };
+        theme::slot_tokens(&sel, &craft_theme::lookup_builtin).1
+    }
+
+    /// Following the suite shows its theme; the launcher's own choice overrides it, and turning
+    /// the override off returns to the suite's theme, with the own choice kept for next time.
+    #[test]
+    fn the_own_choice_overrides_the_suite_and_turns_off_again() {
+        use craft_theme::{Mode, Selection, ThemeId, Variant};
+        let (mut launcher, _sent, ctx) = launcher();
+        launcher.set_suite(craft_theme_store::SuiteWatch::memory(), true);
+        frame(&mut launcher, &ctx, 0.0);
+        // A fresh install with no suite choice yet: ArtCraft, dark.
+        assert_eq!(drawn_tokens(&mut launcher, &ctx, 0.1), builtin_tokens("craft.artcraft", Variant::Dark));
+
+        let graphite = ThemeId::parse("craft.graphite").unwrap();
+        launcher.change_suite(craft_theme_store::SelectionChange::theme(graphite.clone()));
+        assert_eq!(drawn_tokens(&mut launcher, &ctx, 0.2), builtin_tokens("craft.graphite", Variant::Dark));
+        assert_eq!(launcher.suite.accepted.suite.theme.as_ref(), Some(&graphite), "the suite store took the change");
+
+        let mut appearance = launcher.settings.appearance();
+        appearance.follow_suite = false;
+        appearance.own = Selection { theme: ThemeId::app_default(), mode: Mode::Light };
+        launcher.settings.appearance = Some(appearance);
+        assert_eq!(drawn_tokens(&mut launcher, &ctx, 0.3), Tokens::LIGHT, "a fixed Light puts the light palette in the dark slot too");
+        assert_eq!(launcher.settings.theme, theme::ThemeChoice::Light, "older builds read the mode in use");
+
+        let mut appearance = launcher.settings.appearance();
+        appearance.follow_suite = true;
+        launcher.settings.appearance = Some(appearance);
+        assert_eq!(drawn_tokens(&mut launcher, &ctx, 0.4), builtin_tokens("craft.graphite", Variant::Dark));
+        assert_eq!(launcher.settings.appearance().own.mode, Mode::Light);
     }
 }
