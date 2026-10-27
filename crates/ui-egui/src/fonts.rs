@@ -8,9 +8,8 @@ use crate::i18n::fmt;
 use crate::settings::FontSettings;
 use crate::theme::{self, Tokens};
 use craft_font_manager::craft_font_catalog::Watch;
-use craft_font_manager::store::{Installer, NoStore, SuiteStore};
+use craft_font_manager::store::{Installer, NoStore, PREVIEW_SERVICE_ENV, PreviewServiceSource, SuiteStore};
 use craft_font_manager::{Catalog, FontsPanel, Look, Options, Palette, Preset, Runner};
-use craft_font_store::{PREVIEW_SERVICE_ENV, PreviewServiceSource};
 
 fn to_panel(settings: &FontSettings) -> craft_font_manager::Settings {
     let preset = match settings.preset.as_str() {

@@ -342,7 +342,6 @@ version = "0.8.1"
 dependencies = [
  "artcraft-launcher-core",
  "craft-font-manager",
- "craft-font-store",
  "craft-fonts-build",
  "craft-ui",
  "egui",
@@ -985,7 +984,7 @@ dependencies = [
 [[package]]
 name = "craft-atomic"
 version = "0.1.0"
-source = "git+https://github.com/aiongg/craft-libs?rev=294e4850d8d302eaed1d7250a9071c4e79c4592b#294e4850d8d302eaed1d7250a9071c4e79c4592b"
+source = "git+https://github.com/aiongg/craft-libs?rev=d9f374b10bb0a6b967929391ca95f53d895bddf4#d9f374b10bb0a6b967929391ca95f53d895bddf4"
 dependencies = [
  "rustix 1.1.5",
 ]
@@ -993,7 +992,7 @@ dependencies = [
 [[package]]
 name = "craft-font-catalog"
 version = "0.1.0"
-source = "git+https://github.com/aiongg/craft-libs?rev=294e4850d8d302eaed1d7250a9071c4e79c4592b#294e4850d8d302eaed1d7250a9071c4e79c4592b"
+source = "git+https://github.com/aiongg/craft-libs?rev=d9f374b10bb0a6b967929391ca95f53d895bddf4#d9f374b10bb0a6b967929391ca95f53d895bddf4"
 dependencies = [
  "fontique",
  "libc",
@@ -1005,7 +1004,7 @@ dependencies = [
 [[package]]
 name = "craft-font-manager"
 version = "0.1.0"
-source = "git+https://github.com/aiongg/craft-libs?rev=294e4850d8d302eaed1d7250a9071c4e79c4592b#294e4850d8d302eaed1d7250a9071c4e79c4592b"
+source = "git+https://github.com/aiongg/craft-libs?rev=d9f374b10bb0a6b967929391ca95f53d895bddf4#d9f374b10bb0a6b967929391ca95f53d895bddf4"
 dependencies = [
  "craft-font-catalog",
  "craft-font-store",
@@ -1021,7 +1020,7 @@ dependencies = [
 [[package]]
 name = "craft-font-store"
 version = "0.1.0"
-source = "git+https://github.com/aiongg/craft-libs?rev=294e4850d8d302eaed1d7250a9071c4e79c4592b#294e4850d8d302eaed1d7250a9071c4e79c4592b"
+source = "git+https://github.com/aiongg/craft-libs?rev=d9f374b10bb0a6b967929391ca95f53d895bddf4#d9f374b10bb0a6b967929391ca95f53d895bddf4"
 dependencies = [
  "craft-atomic",
  "craft-font-catalog",
@@ -1037,7 +1036,7 @@ dependencies = [
 [[package]]
 name = "craft-fonts-build"
 version = "0.1.0"
-source = "git+https://github.com/aiongg/craft-libs?rev=294e4850d8d302eaed1d7250a9071c4e79c4592b#294e4850d8d302eaed1d7250a9071c4e79c4592b"
+source = "git+https://github.com/aiongg/craft-libs?rev=d9f374b10bb0a6b967929391ca95f53d895bddf4#d9f374b10bb0a6b967929391ca95f53d895bddf4"
 dependencies = [
  "skera",
  "skrifa 0.48.0",
@@ -1046,7 +1045,7 @@ dependencies = [
 [[package]]
 name = "craft-i18n"
 version = "0.1.0"
-source = "git+https://github.com/aiongg/craft-libs?rev=294e4850d8d302eaed1d7250a9071c4e79c4592b#294e4850d8d302eaed1d7250a9071c4e79c4592b"
+source = "git+https://github.com/aiongg/craft-libs?rev=d9f374b10bb0a6b967929391ca95f53d895bddf4#d9f374b10bb0a6b967929391ca95f53d895bddf4"
 dependencies = [
  "fixed_decimal",
  "icu_decimal",
@@ -1080,7 +1079,7 @@ dependencies = [
 [[package]]
 name = "craft-ui"
 version = "0.1.0"
-source = "git+https://github.com/aiongg/craft-libs?rev=294e4850d8d302eaed1d7250a9071c4e79c4592b#294e4850d8d302eaed1d7250a9071c4e79c4592b"
+source = "git+https://github.com/aiongg/craft-libs?rev=d9f374b10bb0a6b967929391ca95f53d895bddf4#d9f374b10bb0a6b967929391ca95f53d895bddf4"
 dependencies = [
  "craft-fonts-build",
  "craft-i18n",
