@@ -332,7 +332,7 @@ impl LauncherUi {
         sheet::panel(ui, tl!("Window"), |ui| {
             ui.checkbox(&mut self.settings.system_title_bar, tl!("Use system title bar"));
             if applies == SystemTitleBar::NextLaunch {
-                note(ui, tl!("Takes effect the next time ArtCraft Launcher starts."));
+                note(ui, tl!("Takes effect the next time the window opens."));
             }
         });
     }

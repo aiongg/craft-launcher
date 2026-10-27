@@ -32,8 +32,9 @@ pub enum SystemTitleBar {
 
 /// What only the shell can do. Every method has a do-nothing default (the web build).
 pub trait Host {
-    /// Who draws the title bar. `system` is the "Use system title bar" setting.
-    fn title_bar(&self, _system: bool) -> Decision {
+    /// Who draws the title bar, with the frame's live geometry (macOS traffic lights, caption
+    /// layout). Asked once per frame. `system` is the "Use system title bar" setting.
+    fn title_bar(&mut self, _ctx: &egui::Context, _system: bool) -> Decision {
         Decision {
             frame: Frame::Native,
             overridden: None,
@@ -178,6 +179,8 @@ pub struct LauncherUi {
     applied_motion: Option<bool>,
     /// Whether the window has the OS's decorations, as last told to the window.
     decorated: Option<bool>,
+    /// The theme last sent to a native (Windows) caption.
+    caption_theme: Option<egui::Theme>,
     /// Fonts registered with `set_fonts` only exist from the next frame on; drawing with the named
     /// weights before then would abort.
     fonts_ready: bool,
@@ -272,6 +275,7 @@ impl LauncherUi {
             motion_recheck: 0.0,
             applied_motion: None,
             decorated: None,
+            caption_theme: None,
             fonts_ready: false,
             cjk_font,
             sent_options: None,
@@ -750,13 +754,26 @@ impl LauncherUi {
             ctx.send_viewport_cmd(egui::ViewportCommand::Decorations(decorated));
         }
         self.decorated = Some(decorated);
+        // Windows draws a native caption in the OS's theme, not the app's: tell it which slot is
+        // in use, whenever the frame switches to the OS's bar and whenever the slot changes.
+        let theme = (cfg!(target_os = "windows") && matches!(frame, Frame::Native)).then(|| ctx.theme());
+        if theme != self.caption_theme {
+            if let Some(theme) = theme {
+                ctx.send_viewport_cmd(egui::ViewportCommand::SetTheme(match theme {
+                    egui::Theme::Dark => egui::SystemTheme::Dark,
+                    egui::Theme::Light => egui::SystemTheme::Light,
+                }));
+            }
+            self.caption_theme = theme;
+        }
     }
 
     /// Draws the launcher.
     pub fn ui(&mut self, ui: &mut egui::Ui, host: &mut dyn Host) {
         let ctx = ui.ctx().clone();
         self.begin_ui_frame(&ctx);
-        let frame = host.title_bar(self.settings.system_title_bar).frame;
+        let system_at_start = self.settings.system_title_bar;
+        let frame = host.title_bar(&ctx, system_at_start).frame;
         self.sync_decorations(&ctx, &frame);
         if matches!(frame, Frame::Inset(_)) && ctx.input_mut(|i| i.consume_key(egui::Modifiers::MAC_CMD, egui::Key::M)) {
             ctx.send_viewport_cmd(egui::ViewportCommand::Minimized(true));
@@ -843,6 +860,10 @@ impl LauncherUi {
         self.draw_toasts(&ctx);
         if matches!(frame, Frame::Integrated(_)) {
             crate::widgets::window_border(&ctx);
+        }
+        // The setting changed in the dialog drawn above: the frame switches next frame.
+        if self.settings.system_title_bar != system_at_start {
+            ctx.request_repaint();
         }
     }
 

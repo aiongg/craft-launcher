@@ -282,7 +282,7 @@ fn harness_full(
 ) -> (Harness<'static, Option<LauncherUi>>, Rc<RefCell<Vec<Command>>>) {
     struct HeaderHost(Bar, Option<&'static str>);
     impl Host for HeaderHost {
-        fn title_bar(&self, _system: bool) -> craft_window::policy::Decision {
+        fn title_bar(&mut self, _ctx: &egui::Context, _system: bool) -> craft_window::policy::Decision {
             self.0.decision()
         }
         fn discord_url(&self) -> &'static str {
@@ -1672,7 +1672,7 @@ fn web_build_offers_downloads() {
 fn custom_title_bar_has_window_buttons() {
     struct FramelessHost;
     impl Host for FramelessHost {
-        fn title_bar(&self, _system: bool) -> craft_window::policy::Decision {
+        fn title_bar(&mut self, _ctx: &egui::Context, _system: bool) -> craft_window::policy::Decision {
             Bar::Custom.decision()
         }
     }
@@ -2586,7 +2586,7 @@ fn settings_pick_the_launchers_own_theme_and_mode() {
 fn the_system_title_bar_setting_switches_the_frame_live() {
     struct LiveHost;
     impl Host for LiveHost {
-        fn title_bar(&self, system: bool) -> craft_window::policy::Decision {
+        fn title_bar(&mut self, _ctx: &egui::Context, system: bool) -> craft_window::policy::Decision {
             if system { Bar::Native } else { Bar::Custom }.decision()
         }
         fn system_title_bar(&self) -> artcraft_launcher_ui_egui::SystemTitleBar {
@@ -2631,15 +2631,53 @@ fn the_system_title_bar_setting_switches_the_frame_live() {
 
     let mut h = run(true);
     h.run_steps(6);
-    h.get_by_label("Settings").click();
-    h.run_steps(6);
-    h.get_by_label("Use system title bar").click();
-    // Collect over the frames after the click: the command goes out in the frame that sees the setting.
-    let mut asked = Vec::new();
-    for _ in 0..4 {
-        h.step();
-        asked.extend(h.output().viewport_output.values().flat_map(|v| v.commands.iter().cloned()));
-    }
+    // The commands the next frames send; the switch lands in the frame after the click.
+    let frames = |h: &mut Harness<'_, Option<LauncherUi>>| {
+        let mut asked = Vec::new();
+        for _ in 0..4 {
+            h.step();
+            asked.extend(h.output().viewport_output.values().flat_map(|v| v.commands.iter().cloned()));
+        }
+        asked
+    };
+    // A press and drag on the window's top edge, and what the window was asked to do.
+    let drag_top = |h: &mut Harness<'_, Option<LauncherUi>>| {
+        let start = egui::pos2(600.0, 4.0);
+        let mut asked = Vec::new();
+        for event in [
+            egui::Event::PointerMoved(start),
+            egui::Event::PointerButton { pos: start, button: egui::PointerButton::Primary, pressed: true, modifiers: egui::Modifiers::NONE },
+            egui::Event::PointerMoved(start + egui::vec2(0.0, 6.0)),
+            egui::Event::PointerButton { pos: start, button: egui::PointerButton::Primary, pressed: false, modifiers: egui::Modifiers::NONE },
+        ] {
+            h.input_mut().events.push(event);
+            h.step();
+            asked.extend(h.output().viewport_output.values().flat_map(|v| v.commands.iter().cloned()));
+        }
+        asked
+    };
+    let resizes = |asked: &[egui::ViewportCommand]| asked.iter().any(|c| matches!(c, egui::ViewportCommand::BeginResize(_)));
+    // Toggles the setting in the Settings dialog, then closes the dialog; returns the commands sent.
+    let toggle = |h: &mut Harness<'_, Option<LauncherUi>>| {
+        h.get_by_label("Settings").click();
+        h.run_steps(6);
+        h.get_by_label("Use system title bar").click();
+        let asked = frames(h);
+        h.key_press(egui::Key::Escape);
+        h.run_steps(6);
+        asked
+    };
+    h.get_by_label("Minimize");
+    assert!(resizes(&drag_top(&mut h)), "the integrated bar resizes from its top edge");
+
+    let asked = toggle(&mut h);
     assert!(h.state().as_ref().unwrap().settings.system_title_bar);
     assert!(asked.contains(&egui::ViewportCommand::Decorations(true)), "{asked:?}");
+    assert!(h.query_by_label("Minimize").is_none(), "the OS draws the caption buttons now");
+    assert!(!resizes(&drag_top(&mut h)), "and the OS resizes");
+
+    let asked = toggle(&mut h);
+    assert!(!h.state().as_ref().unwrap().settings.system_title_bar);
+    assert!(asked.contains(&egui::ViewportCommand::Decorations(false)), "{asked:?}");
+    h.get_by_label("Minimize");
 }

@@ -70,7 +70,14 @@ impl LauncherUi {
             restore: tl!("Restore").into(),
             close: tl!("Close").into(),
         };
-        let bar = TitleBar::new(frame, HEADER_H, theme::caption_colors(ui.ctx())).labels(&labels).show(ui, |ui, _| self.header_content(ui, &t));
+        let bar = TitleBar::new(frame, HEADER_H, theme::caption_colors(ui.ctx())).labels(&labels).show(ui, |ui, slots| {
+            // The controls centre on the bar's centre line: the traffic lights' on macOS.
+            let h = (2.0 * (slots.centre_line - slots.content.top())).clamp(16.0, HEADER_H);
+            let rect = Rect::from_center_size(egui::pos2(slots.content.center().x, slots.centre_line), vec2(slots.content.width(), h));
+            ui.scope_builder(egui::UiBuilder::new().max_rect(rect).layout(egui::Layout::left_to_right(egui::Align::Center)), |ui| {
+                self.header_content(ui, &t, h);
+            });
+        });
         if bar.close_requested {
             ui.ctx().send_viewport_cmd(egui::ViewportCommand::Close);
         }
@@ -78,8 +85,7 @@ impl LauncherUi {
 
     /// The wordmark, the Craft App Suite label and the Settings button, between the title bar's
     /// leading inset and its caption buttons.
-    fn header_content(&mut self, ui: &mut Ui, t: &Tokens) {
-        let h = HEADER_H;
+    fn header_content(&mut self, ui: &mut Ui, t: &Tokens, h: f32) {
         ui.spacing_mut().item_spacing.x = 0.0;
         // The ArtCraft wordmark exactly as supplied, in its own cell.
         let logo = vec2(14.0 * crate::icons::ARTCRAFT_LOGO_ASPECT, 14.0);

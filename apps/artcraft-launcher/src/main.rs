@@ -24,7 +24,7 @@ use artcraft_launcher_native::single_instance::{self, Instance};
 use artcraft_launcher_native::{NativeBackend, login};
 use artcraft_launcher_ui_egui::{Host, LauncherUi, Settings, SystemTitleBar};
 use craft_window::Prefix;
-use craft_window::policy::{Backend as WindowBackend, Decision, DesktopKind, Frame, Os, TitleBarPref};
+use craft_window::policy::{Backend as WindowBackend, Decision, DesktopKind, Frame, LayoutWatch, Os, TitleBarPref};
 use eframe::wgpu::rwh::{HasDisplayHandle, RawDisplayHandle};
 
 const APP_ID: &str = "ai.storyteller.artcraft-launcher";
@@ -510,11 +510,61 @@ fn claim_notification_identity() -> &'static Result<(), String> {
 struct DesktopHost {
     tray: bool,
     quit: bool,
+    /// The measured traffic-lights inset (macOS).
+    lights: craft_window::mac::TrafficLights,
+    /// The caption layout, kept current while the app runs (read when first needed).
+    layouts: Option<LayoutWatch>,
+    /// The window had keyboard focus at the last `watch`.
+    focused: bool,
+    /// The `movable` flag last set on the window (macOS).
+    #[cfg_attr(not(target_os = "macos"), allow(dead_code))]
+    movable: Option<bool>,
+}
+
+impl DesktopHost {
+    fn new() -> Self {
+        Self { tray: false, quit: false, lights: craft_window::mac::TrafficLights::new(), layouts: None, focused: false, movable: None }
+    }
+
+    fn layouts(&mut self) -> &mut LayoutWatch {
+        self.layouts.get_or_insert_with(|| LayoutWatch::new(integrated_decision()))
+    }
+
+    /// Feeds the layout watch: GNOME's `button-layout` from the appearance watcher, and a re-read of
+    /// KWin's and GTK's files when the window regains focus.
+    fn watch(&mut self, gnome_layout: Option<&str>, focused: bool) {
+        let regained = focused && !self.focused;
+        self.focused = focused;
+        let layouts = self.layouts();
+        layouts.set_gnome(gnome_layout);
+        if regained {
+            layouts.on_focus();
+        }
+    }
+
+    /// macOS: lets the window move only where the title bar is (not over the bar's own controls).
+    #[cfg(target_os = "macos")]
+    fn sync_movable(&mut self, ctx: &egui::Context, system: bool) {
+        if matches!(self.title_bar(ctx, system).frame, Frame::Inset(_)) {
+            craft_window::title_bar::sync_movable(ctx, &mut self.movable);
+        }
+    }
 }
 
 impl Host for DesktopHost {
-    fn title_bar(&self, system: bool) -> Decision {
-        frame_decision(system)
+    fn title_bar(&mut self, ctx: &egui::Context, system: bool) -> Decision {
+        let mut decision = frame_decision(system);
+        match &mut decision.frame {
+            Frame::Inset(inset) if Os::current() == Os::Mac => {
+                // `None` is full screen, where the bar reserves no inset anyway.
+                if let Some(measured) = self.lights.update(ctx) {
+                    *inset = measured;
+                }
+            }
+            Frame::Integrated(captions) => captions.layout = self.layouts().layout().clone(),
+            _ => {}
+        }
+        decision
     }
 
     fn system_title_bar(&self) -> SystemTitleBar {
@@ -623,7 +673,7 @@ impl Launcher {
             appearance: None,
             ui: LauncherUi::new(&windowless, backend, Settings::default()),
             tray: None,
-            host: DesktopHost { tray: false, quit: false },
+            host: DesktopHost::new(),
             starts,
             windowless,
             run_again,
@@ -844,6 +894,12 @@ impl<'a> Shell<'a> {
 impl eframe::App for Shell<'_> {
     fn logic(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         let requests = self.launcher.tick(ctx);
+        #[cfg(all(unix, not(target_os = "macos")))]
+        let gnome_layout = self.launcher.appearance.as_ref().and_then(|w| w.button_layout());
+        #[cfg(not(all(unix, not(target_os = "macos"))))]
+        let gnome_layout: Option<String> = None;
+        let focused = ctx.input(|i| i.focused);
+        self.launcher.host.watch(gnome_layout.as_deref(), focused);
         #[cfg(target_os = "macos")]
         if self.applied_follow != Some(self.launcher.ui.settings.show_on_current_desktop) {
             let on = self.launcher.ui.settings.show_on_current_desktop;
@@ -879,6 +935,11 @@ impl eframe::App for Shell<'_> {
 
     fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
         self.launcher.ui.ui(ui, &mut self.launcher.host);
+        #[cfg(target_os = "macos")]
+        {
+            let system = self.launcher.ui.settings.system_title_bar;
+            self.launcher.host.sync_movable(ui.ctx(), system);
+        }
         ui.ctx().output_mut(|o| {
             o.commands.retain(|cmd| {
                 // The Discord deep link goes to the system opener, falling back to the web invite;
@@ -900,7 +961,8 @@ impl eframe::App for Shell<'_> {
         if let Some(watcher) = &self.launcher.appearance {
             portal_system_theme(raw_input, watcher.current());
         }
-        if matches!(self.launcher.host.title_bar(self.launcher.ui.settings.system_title_bar).frame, Frame::Integrated(_)) {
+        let system = self.launcher.ui.settings.system_title_bar;
+        if matches!(self.launcher.host.title_bar(ctx, system).frame, Frame::Integrated(_)) {
             craft_ui::title_bar::release_after_os_resize(ctx, raw_input);
         }
         self.launcher.ui.raw_input(ctx, raw_input);
