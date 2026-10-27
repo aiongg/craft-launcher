@@ -514,7 +514,7 @@ struct DesktopHost {
     lights: craft_window::mac::TrafficLights,
     /// The caption layout, kept current while the app runs (read when first needed).
     layouts: Option<LayoutWatch>,
-    /// The window had keyboard focus at the last `watch`.
+    /// The window had keyboard focus at the last `watch`; starts true so the first frame does not re-read the files.
     focused: bool,
     /// The `movable` flag last set on the window (macOS).
     #[cfg_attr(not(target_os = "macos"), allow(dead_code))]
@@ -523,7 +523,7 @@ struct DesktopHost {
 
 impl DesktopHost {
     fn new() -> Self {
-        Self { tray: false, quit: false, lights: craft_window::mac::TrafficLights::new(), layouts: None, focused: false, movable: None }
+        Self { tray: false, quit: false, lights: craft_window::mac::TrafficLights::new(), layouts: None, focused: true, movable: None }
     }
 
     fn layouts(&mut self) -> &mut LayoutWatch {

@@ -180,7 +180,9 @@ pub struct LauncherUi {
     /// Whether the window has the OS's decorations, as last told to the window.
     decorated: Option<bool>,
     /// The theme last sent to a native (Windows) caption.
-    caption_theme: Option<egui::Theme>,
+    /// With the slot in use, the OS's answer at that time: winit repaints a native caption in the
+    /// OS theme when Windows' settings change, so the choice is sent again then.
+    caption_theme: Option<(egui::Theme, Option<egui::Theme>)>,
     /// Fonts registered with `set_fonts` only exist from the next frame on; drawing with the named
     /// weights before then would abort.
     fonts_ready: bool,
@@ -756,9 +758,9 @@ impl LauncherUi {
         self.decorated = Some(decorated);
         // Windows draws a native caption in the OS's theme, not the app's: tell it which slot is
         // in use, whenever the frame switches to the OS's bar and whenever the slot changes.
-        let theme = (cfg!(target_os = "windows") && matches!(frame, Frame::Native)).then(|| ctx.theme());
+        let theme = (cfg!(target_os = "windows") && matches!(frame, Frame::Native)).then(|| (ctx.theme(), ctx.input(|i| i.raw.system_theme)));
         if theme != self.caption_theme {
-            if let Some(theme) = theme {
+            if let Some((theme, _)) = theme {
                 ctx.send_viewport_cmd(egui::ViewportCommand::SetTheme(match theme {
                     egui::Theme::Dark => egui::SystemTheme::Dark,
                     egui::Theme::Light => egui::SystemTheme::Light,
