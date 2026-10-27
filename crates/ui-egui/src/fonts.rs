@@ -1,5 +1,5 @@
 //! The Fonts page: Craft Font Manager's panel in the launcher's look, and the download consent and
-//! font preview server the Settings dialog shows. Desktop only: the web build has no font store.
+//! preview settings the Settings dialog shows. Desktop only: the web build has no font store.
 
 use std::sync::Arc;
 use std::time::Duration;
@@ -10,6 +10,7 @@ use crate::theme::{self, Tokens};
 use craft_font_manager::craft_font_catalog::Watch;
 use craft_font_manager::store::{Installer, NoStore, SuiteStore};
 use craft_font_manager::{Catalog, FontsPanel, Look, Options, Palette, Preset, Runner};
+use craft_font_store::{PREVIEW_SERVICE_ENV, PreviewServiceSource};
 
 fn to_panel(settings: &FontSettings) -> craft_font_manager::Settings {
     let preset = match settings.preset.as_str() {
@@ -47,16 +48,14 @@ const CONSENT_RECHECK_SECS: f64 = 3.0;
 /// shows them without input.
 const CATALOG_WATCH: Duration = Duration::from_secs(2);
 
-/// craft-font-store's variable that takes precedence over the preview server setting.
-const PREVIEW_SERVICE_ENV: &str = "CRAFT_FONT_PREVIEW_URL";
-
-/// The preview server field in Settings, as typed.
+/// The preview settings in Settings, as shown and typed.
 struct PreviewField {
     text: String,
-    /// Why the typed address wasn't saved, from the font store.
+    /// Where the server in effect comes from; the environment's can't be edited.
+    source: PreviewServiceSource,
+    enabled: bool,
+    /// Why the last change wasn't saved, from the font store.
     error: Option<String>,
-    /// The environment sets the server, so the field only shows it.
-    from_env: bool,
     read_at: f64,
 }
 
@@ -110,23 +109,32 @@ impl FontsTab {
         }
     }
 
-    /// Through the panel once it is built, so previews that failed for lack of consent are asked
-    /// for again.
     pub(crate) fn set_downloads_allowed(&mut self, allowed: bool) -> Result<(), String> {
         self.consent = None;
-        match self.panel.as_mut() {
-            Some(panel) => panel.set_downloads_allowed(allowed),
-            None => self.installer.allow_downloads(allowed),
-        }
-        .map_err(|e| e.to_string())
+        self.installer.allow_downloads(allowed).map_err(|e| e.to_string())
     }
 
     fn read_preview_field(&self, now: f64) -> PreviewField {
         PreviewField {
             text: self.installer.preview_service().unwrap_or_default(),
+            source: self.installer.preview_service_source(),
+            enabled: self.installer.previews_enabled(),
             error: None,
-            from_env: std::env::var(PREVIEW_SERVICE_ENV).is_ok_and(|v| !v.trim().is_empty()),
             read_at: now,
+        }
+    }
+
+    /// The panel reads the preview settings again on its next frame.
+    fn preview_settings_changed(&mut self, now: f64) {
+        if let Some(panel) = self.panel.as_mut() {
+            panel.reload_preview_settings();
+        }
+        self.preview = Some(self.read_preview_field(now));
+    }
+
+    fn preview_error(&mut self, error: String) {
+        if let Some(field) = self.preview.as_mut() {
+            field.error = Some(error);
         }
     }
 
@@ -140,18 +148,15 @@ impl FontsTab {
             return;
         }
         match self.installer.set_preview_service(url) {
-            Ok(()) => self.preview = Some(self.read_preview_field(now)),
-            Err(e) => {
-                if let Some(field) = self.preview.as_mut() {
-                    field.error = Some(e.to_string());
-                }
-            }
+            Ok(()) => self.preview_settings_changed(now),
+            Err(e) => self.preview_error(fmt(tl!("Couldn't use this server: {e}"), &[("e", &e.to_string())])),
         }
     }
 
-    /// The font preview server field, for the Settings dialog: saved when it loses focus or on
-    /// Enter, and read again from the store every few seconds while it isn't being edited.
-    pub(crate) fn preview_server_ui(&mut self, ui: &mut egui::Ui) {
+    /// The previews switch and the preview server field, for the Settings dialog. The address is
+    /// saved when the field loses focus or on Enter; both are read again from the store every
+    /// few seconds while the field isn't being edited.
+    pub(crate) fn preview_settings_ui(&mut self, ui: &mut egui::Ui) {
         let t = Tokens::get(ui.ctx());
         let now = ui.input(|i| i.time);
         let id = ui.make_persistent_id("font-preview-server");
@@ -160,11 +165,13 @@ impl FontsTab {
         if stale {
             self.preview = Some(self.read_preview_field(now));
         }
-        let allowed = self.downloads_allowed(now);
         let Some(field) = self.preview.as_mut() else { return };
+        let mut enabled = field.enabled;
+        let toggled = ui.checkbox(&mut enabled, tl!("Show font previews")).changed();
         let label = ui.label(tl!("Font preview server"));
+        let from_env = field.source == PreviewServiceSource::Env;
         let edit = egui::TextEdit::singleline(&mut field.text).id(id).hint_text("https://").desired_width(f32::INFINITY);
-        let response = ui.add_enabled(!field.from_env, edit).labelled_by(label.id);
+        let response = ui.add_enabled(!from_env, edit).labelled_by(label.id);
         if response.changed() {
             field.error = None;
         }
@@ -172,20 +179,18 @@ impl FontsTab {
             ui.add(egui::Label::new(egui::RichText::new(text).size(12.0).color(color)).wrap());
         };
         if let Some(error) = &field.error {
-            small(ui, &fmt(tl!("Couldn't use this server: {e}"), &[("e", error)]), t.bad);
+            small(ui, error, t.bad);
         }
-        if field.from_env {
+        if from_env {
             small(ui, &fmt(tl!("Set by {name} in the environment."), &[("name", PREVIEW_SERVICE_ENV)]), t.muted);
-        } else if !field.text.trim().is_empty() && field.error.is_none() && !allowed {
-            small(ui, tl!("Previews from this server load once font downloads are allowed."), t.muted);
         }
-        small(
-            ui,
-            tl!(
-                "Shows fonts before you install them, and serves their files first. An https address, or http to 127.0.0.1 or [::1] for a server on this computer. Empty uses none."
-            ),
-            t.muted,
-        );
+        small(ui, tl!("Fonts you haven't installed show their previews from this server, and installs try it first. Empty uses none."), t.muted);
+        if toggled {
+            match self.installer.set_previews_enabled(enabled) {
+                Ok(()) => self.preview_settings_changed(now),
+                Err(e) => self.preview_error(fmt(tl!("Couldn't change the font previews setting: {e}"), &[("e", &e.to_string())])),
+            }
+        }
         if response.lost_focus() {
             self.apply_preview_server(now);
         }

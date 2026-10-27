@@ -211,11 +211,7 @@ fn sources_are_added_in_settings() {
 }
 
 #[test]
-fn the_preview_server_is_set_in_settings() {
-    // The environment variable takes precedence and makes the field read-only.
-    if std::env::var("CRAFT_FONT_PREVIEW_URL").is_ok_and(|v| !v.trim().is_empty()) {
-        return;
-    }
+fn preview_settings_are_set_in_settings() {
     let (mut h, store) = launcher("preview-server", "en", Runner::Inline);
     let service = || craft_font_manager::store::Installer::preview_service(&*store);
     let refused = |h: &Harness<'_, Option<LauncherUi>>| {
@@ -244,6 +240,19 @@ fn the_preview_server_is_set_in_settings() {
     settle(&mut h);
     assert_eq!(service().as_deref(), Some("http://127.0.0.1:9"));
     assert!(!refused(&h));
+
+    // Space toggles the focused switch: the Fonts box can be below the dialog's fold.
+    let enabled = || craft_font_manager::store::Installer::previews_enabled(&*store);
+    assert!(enabled(), "previews are on by default");
+    let switch = "Show font previews";
+    h.get_by_role_and_label(Role::CheckBox, switch).focus();
+    h.step();
+    h.key_press(egui::Key::Space);
+    settle(&mut h);
+    assert!(!enabled());
+    h.key_press(egui::Key::Space);
+    settle(&mut h);
+    assert!(enabled());
 }
 
 /// Types the example source into Settings and adds it, then waits for its index.

@@ -22,6 +22,8 @@ log = { workspace = true }
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 # The Fonts page: Craft Font Manager's panel, the font store and the installed fonts.
 craft-font-manager = { workspace = true }
+# Where the preview server setting comes from (craft-font-manager doesn't re-export it).
+craft-font-store = { workspace = true }
 # The OS's preferred UI languages, without spawning `defaults` or `reg.exe`.
 sys-locale = "0.3"
 # The system's fonts, for the CJK languages in a build without craft-fonts' faces (build.rs) and

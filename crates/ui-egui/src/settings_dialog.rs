@@ -297,7 +297,7 @@ impl LauncherUi {
         });
     }
 
-    /// The font store's download consent and preview server, which every Craft app shares.
+    /// The font store's download consent and preview settings, which every Craft app shares.
     #[cfg(not(target_arch = "wasm32"))]
     fn settings_fonts(&mut self, ui: &mut Ui) {
         sheet::panel(ui, tl!("Fonts"), |ui| {
@@ -310,7 +310,7 @@ impl LauncherUi {
             }
             note(ui, tl!("Fonts download from their sources only when you install or preview one. Every Craft app shares this setting."));
             ui.add_space(10.0);
-            self.fonts.preview_server_ui(ui);
+            self.fonts.preview_settings_ui(ui);
             ui.add_space(10.0);
             widgets::hud(ui, tl!("Sources"), Tokens::get(ui.ctx()).faint);
             ui.add_space(2.0);
