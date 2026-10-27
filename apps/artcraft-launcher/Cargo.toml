@@ -32,9 +32,6 @@ ron = "0.12.2"
 serde = { workspace = true }
 craft-quit = { version = "0.1.0", git = "https://github.com/storytold/craft-libs", rev = "92d392cff132eaf53e13afff77f38b5c11b73aa0", features = ["egui"] }
 
-[target.'cfg(target_os = "linux")'.dependencies]
-zbus = "5"
-
 # The tray (menu bar) icon. On Linux and the BSDs the StatusNotifierItem backend talks D-Bus
 # directly, so no GTK or libappindicator is needed.
 [target.'cfg(any(target_os = "macos", target_os = "windows"))'.dependencies]
@@ -56,6 +53,7 @@ winreg = "0.55"
 # Linux and the BSDs: the desktop's animations setting, from its settings portal (motion.rs).
 # Already in Cargo.lock through tray-icon and notify-rust.
 [target.'cfg(all(unix, not(target_os = "macos")))'.dependencies]
+craft-platform = { workspace = true }
 zbus = { version = "5", default-features = false, features = ["async-io", "blocking-api"] }
 
 [target.'cfg(any(target_os = "linux", target_os = "freebsd", target_os = "openbsd", target_os = "netbsd", target_os = "dragonfly"))'.dependencies]

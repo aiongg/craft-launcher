@@ -120,7 +120,7 @@ impl Tokens {
     /// same variant, so this reads the stored set and never derives one from `ctx.theme()` alone.
     pub fn get(ctx: &egui::Context) -> Self {
         let theme = ctx.theme();
-        let stored = ctx.data(|d| d.get_temp::<SlotTokens>(egui::Id::new(SLOT_TOKENS_KEY)));
+        let stored = ctx.data(|d| d.get_temp::<SlotTokens>(egui::Id::unique(SLOT_TOKENS_KEY)));
         match (stored, theme) {
             (Some(slots), egui::Theme::Dark) => slots.dark,
             (Some(slots), egui::Theme::Light) => slots.light,
@@ -248,7 +248,7 @@ pub fn install(ctx: &egui::Context, light: Tokens, dark: Tokens) {
     for (theme, tokens) in [(egui::Theme::Light, &light), (egui::Theme::Dark, &dark)] {
         ctx.set_style_of(theme, slot_style((*ctx.style_of(theme)).clone(), tokens));
     }
-    ctx.data_mut(|d| d.insert_temp(egui::Id::new(SLOT_TOKENS_KEY), SlotTokens { light, dark }));
+    ctx.data_mut(|d| d.insert_temp(egui::Id::unique(SLOT_TOKENS_KEY), SlotTokens { light, dark }));
     ctx.options_mut(|o| o.fallback_theme = egui::Theme::Dark);
     ctx.set_theme(egui::ThemePreference::System);
 }
