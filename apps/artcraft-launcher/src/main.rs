@@ -128,6 +128,8 @@ fn main() -> ExitCode {
         launcher.start(settings, &waker);
         window = launcher.tray.is_none();
     }
+    // One store for every pass: each pass's tracker saves into it, and the next pass opens from it.
+    let window_store = Arc::new(Mutex::new(settings_file::open_window_store(settings_path.as_deref())));
     // One pass per window: where a window can't hide, closing to the tray ends its pass and the
     // launcher carries on without one until the window is asked for again.
     loop {
@@ -139,12 +141,14 @@ fn main() -> ExitCode {
                     settings_path.as_deref().and_then(|p| settings_file::load::<Settings>(p, SETTINGS_KEY)).is_some_and(|s| s.system_title_bar)
                 };
                 let (waker, launcher) = (waker.clone(), &mut launcher);
+                let mut options = native_options(hidden, system_bar);
+                let tracker = craft_window::restore::install(&mut options, &window_store, craft_window::restore::MAIN, &window_defaults());
                 eframe::run_native(
                     "ArtCraft Launcher",
-                    native_options(hidden, system_bar),
+                    options,
                     Box::new(move |cc| {
                         launcher.open(cc, &waker);
-                        Ok(Box::new(Shell::new(cc, launcher, hidden)))
+                        Ok(Box::new(Shell::new(cc, launcher, hidden, tracker)))
                     }),
                 )
             };
@@ -163,6 +167,12 @@ fn main() -> ExitCode {
         hidden = false;
         window = true;
     }
+}
+
+/// First-window size and minimum, as `native_options` asks for them. Wayland keeps window
+/// positions from clients, so none is saved or applied there.
+fn window_defaults() -> craft_window::restore::Defaults {
+    craft_window::restore::Defaults::new([1120.0, 760.0], [720.0, 500.0]).with_no_position(WindowBackend::from_env() == WindowBackend::Wayland)
 }
 
 /// Whether the current window was created with the OS's title bar. macOS cannot switch an open
@@ -217,10 +227,10 @@ fn native_options(hidden: bool, system_bar: bool) -> eframe::NativeOptions {
         viewport = viewport.with_icon(icon);
     }
     // Persistence goes to the same file `settings_file` uses, so a portable suite keeps its
-    // settings and window state inside itself instead of in the user's profile.
+    // settings inside itself instead of in the user's profile. The window's placement is not
+    // eframe's: `craft_window::restore::install` turns that off and opens from `window.json`.
     eframe::NativeOptions {
         viewport,
-        persist_window: true,
         persistence_path: settings_file::path(APP_ID),
         wgpu_options: within_adapter_limits(wgpu_options()),
         // The launcher's typography is deliberate (its bundled Latin and monochrome emoji faces
@@ -837,14 +847,16 @@ struct Shell<'a> {
     /// The "show on the current desktop" setting last applied to the window (macOS).
     #[cfg_attr(not(target_os = "macos"), allow(dead_code))]
     applied_follow: Option<bool>,
+    /// Keeps `window.json` current; saves when the window closes, so the next pass reopens there.
+    tracker: craft_window::restore::Tracker,
 }
 
 impl<'a> Shell<'a> {
-    fn new(cc: &eframe::CreationContext<'_>, launcher: &'a mut Launcher, hidden: bool) -> Self {
+    fn new(cc: &eframe::CreationContext<'_>, launcher: &'a mut Launcher, hidden: bool, tracker: craft_window::restore::Tracker) -> Self {
         let window_hides = window_can_hide(cc.display_handle().ok().map(|d| d.as_raw()));
         // Started hidden at login but there's no tray to come back from: show the window.
         let visible = !hidden || launcher.tray.is_none();
-        let mut shell = Self { launcher, window_hides, visible: true, quitting: false, applied_follow: None };
+        let mut shell = Self { launcher, window_hides, visible: true, quitting: false, applied_follow: None, tracker };
         if !visible {
             shell.put_away(&cc.egui_ctx);
         } else if hidden {
@@ -893,6 +905,7 @@ impl<'a> Shell<'a> {
 
 impl eframe::App for Shell<'_> {
     fn logic(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+        self.tracker.frame(ctx);
         let requests = self.launcher.tick(ctx);
         #[cfg(all(unix, not(target_os = "macos")))]
         let gnome_layout = self.launcher.appearance.as_ref().and_then(|w| w.button_layout());
@@ -1250,11 +1263,18 @@ mod tests {
         assert!(!waker.quit_unseen());
     }
 
+    /// A tracker over an in-memory store: writes nothing.
+    fn idle_tracker() -> craft_window::restore::Tracker {
+        let store = Arc::new(Mutex::new(craft_window::restore::Store::in_memory()));
+        craft_window::restore::Tracker::new(&store, craft_window::restore::MAIN, &window_defaults())
+    }
+
     #[test]
     fn quitting_overrides_a_close_to_the_tray() {
         let (mut launcher, _show, _) = launcher();
         let ctx = launcher.windowless.clone();
-        let mut shell = Shell { launcher: &mut launcher, window_hides: false, visible: true, quitting: false, applied_follow: None };
+        let mut shell =
+            Shell { launcher: &mut launcher, window_hides: false, visible: true, quitting: false, applied_follow: None, tracker: idle_tracker() };
         shell.put_away(&ctx);
         assert!(shell.launcher.closed_to_tray);
         shell.quit(&ctx);
@@ -1265,7 +1285,8 @@ mod tests {
     fn a_window_that_hides_is_not_closed_to_the_tray() {
         let (mut launcher, _show, _) = launcher();
         let ctx = launcher.windowless.clone();
-        let mut shell = Shell { launcher: &mut launcher, window_hides: true, visible: true, quitting: false, applied_follow: None };
+        let mut shell =
+            Shell { launcher: &mut launcher, window_hides: true, visible: true, quitting: false, applied_follow: None, tracker: idle_tracker() };
         shell.put_away(&ctx);
         assert!(!shell.visible);
         assert!(!shell.launcher.closed_to_tray);

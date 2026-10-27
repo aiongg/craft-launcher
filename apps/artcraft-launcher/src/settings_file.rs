@@ -17,6 +17,27 @@ pub fn path(app_id: &str) -> Option<PathBuf> {
         .or_else(|| eframe::storage_dir(app_id).map(|dir| dir.join("app.ron")))
 }
 
+/// The window-restore store's file: `window.json` beside the settings file, so a portable suite
+/// carries its window placement with it.
+pub fn window_store_path(settings: &Path) -> PathBuf {
+    settings.with_file_name(craft_window::restore::FILE_NAME)
+}
+
+/// The window-restore store for the settings file `settings` (an in-memory one without a path).
+/// A store with no placement imports eframe's `"window"` entry from `app.ron`, which older builds
+/// saved there; that entry stays as it is for them.
+pub fn open_window_store(settings: Option<&Path>) -> craft_window::restore::Store {
+    use craft_window::restore::{MAIN, Store, legacy};
+    let Some(settings) = settings else { return Store::in_memory() };
+    let mut store = Store::at(&window_store_path(settings));
+    if store.get(MAIN).is_none()
+        && let Some(placement) = legacy::eframe_app_ron_file(settings)
+    {
+        store.set(MAIN, &placement);
+    }
+    store
+}
+
 /// The settings file inside a portable suite: the same `data` folder `Paths` already uses.
 fn portable_settings(root: &Path) -> PathBuf {
     root.join("data").join("app.ron")
@@ -98,6 +119,60 @@ mod tests {
         fn drop(&mut self) {
             let _ = std::fs::remove_dir_all(&self.0);
         }
+    }
+
+    /// eframe 0.37's `"window"` entry as it writes it to `app.ron`.
+    const EFRAME_WINDOW: &str =
+        "(inner_position_pixels:Some((x:210.0,y:130.0)),inner_size_points:Some((x:900.0,y:640.0)),maximized:false,fullscreen:false)";
+
+    fn write_window(dir: &Scratch, window: &str) {
+        assert!(std::fs::create_dir_all(&dir.0).is_ok());
+        assert!(std::fs::write(dir.file(), format!("{{\n    \"window\": {window:?},\n}}")).is_ok());
+    }
+
+    #[test]
+    fn the_window_store_sits_beside_the_settings() {
+        let settings = PathBuf::from("data").join("app.ron");
+        assert_eq!(window_store_path(&settings), PathBuf::from("data").join("window.json"));
+    }
+
+    #[test]
+    fn the_window_comes_from_eframes_app_ron_once() {
+        use craft_window::restore::MAIN;
+        let dir = Scratch::new("window-import");
+        write_window(&dir, EFRAME_WINDOW);
+        let store = open_window_store(Some(&dir.file()));
+        let placement = store.get(MAIN).expect("imported");
+        assert_eq!(placement.normal.size, [900.0, 640.0]);
+        assert_eq!(placement.position_px, Some([210, 130]));
+        assert!(!placement.maximized);
+        // The old entry stays for older builds.
+        assert_eq!(RonFile::read(&dir.file()).0.get("window").map(String::as_str), Some(EFRAME_WINDOW));
+    }
+
+    #[test]
+    fn a_saved_placement_is_not_overwritten_by_the_import() {
+        use craft_window::restore::{MAIN, Placement};
+        let dir = Scratch::new("window-no-import");
+        write_window(&dir, EFRAME_WINDOW);
+        let mut store = craft_window::restore::Store::at(&window_store_path(&dir.file()));
+        let mine = Placement::new([1300.0, 800.0], 1.0);
+        store.set(MAIN, &mine);
+        assert!(matches!(store.save(), Ok(true)));
+        assert_eq!(open_window_store(Some(&dir.file())).get(MAIN), Some(mine));
+    }
+
+    #[test]
+    fn a_saved_window_reads_back_after_a_restart() {
+        use craft_window::restore::{MAIN, Placement};
+        let dir = Scratch::new("window-round-trip");
+        let mut first = open_window_store(Some(&dir.file()));
+        assert_eq!(first.get(MAIN), None);
+        let mut placement = Placement::new([1000.0, 700.0], 2.0);
+        placement.maximized = true;
+        first.set(MAIN, &placement);
+        assert!(matches!(first.save(), Ok(true)));
+        assert_eq!(open_window_store(Some(&dir.file())).get(MAIN), Some(placement));
     }
 
     #[test]

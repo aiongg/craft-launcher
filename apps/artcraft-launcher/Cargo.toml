@@ -32,7 +32,8 @@ ron = "0.12.2"
 serde = { workspace = true }
 # The shared suite theme folder, watched for the UI.
 craft-theme-store = { workspace = true }
-craft-window = { workspace = true }
+# `restore-egui`: the window-restore store and its eframe tracker (wgpu, as the launcher renders).
+craft-window = { workspace = true, features = ["restore-egui"] }
 craft-ui = { workspace = true }
 craft-quit = { version = "0.1.0", git = "https://github.com/aiongg/craft-libs", rev = "b105d7cbb67f22c6327799baba7a065737fd4fd6", features = ["egui"] }
 
