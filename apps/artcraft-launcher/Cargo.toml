@@ -32,7 +32,7 @@ ron = "0.12.2"
 serde = { workspace = true }
 # The shared suite theme folder, watched for the UI.
 craft-theme-store = { workspace = true }
-craft-quit = { version = "0.1.0", git = "https://github.com/aiongg/craft-libs", rev = "3ee058fdeec2b19da012476ffff3f5aad1b65283", features = ["egui"] }
+craft-quit = { version = "0.1.0", git = "https://github.com/aiongg/craft-libs", rev = "e45b77904efa6b0b76ecfab709a235e00ac1f53f", features = ["egui"] }
 
 # The tray (menu bar) icon. On Linux and the BSDs the StatusNotifierItem backend talks D-Bus
 # directly, so no GTK or libappindicator is needed.
