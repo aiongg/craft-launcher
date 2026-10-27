@@ -25,9 +25,9 @@ eframe = { version = "0.37", default-features = false }
 egui_extras = { version = "0.37", default-features = false }
 egui_kittest = "0.37"
 # No colour glyphs, and no system font lookup of its own: `theme` brings egui's provider.
-craft-ui = { git = "https://github.com/aiongg/craft-libs", rev = "d9f374b10bb0a6b967929391ca95f53d895bddf4" }
-craft-fonts-build = { git = "https://github.com/aiongg/craft-libs", rev = "d9f374b10bb0a6b967929391ca95f53d895bddf4" }
-craft-font-manager = { git = "https://github.com/aiongg/craft-libs", rev = "d9f374b10bb0a6b967929391ca95f53d895bddf4", features = ["egui"] }
+craft-ui = { git = "https://github.com/aiongg/craft-libs", rev = "450dbd721091cd80ce81eb5aaef3ff79c4295706" }
+craft-fonts-build = { git = "https://github.com/aiongg/craft-libs", rev = "450dbd721091cd80ce81eb5aaef3ff79c4295706" }
+craft-font-manager = { git = "https://github.com/aiongg/craft-libs", rev = "450dbd721091cd80ce81eb5aaef3ff79c4295706", features = ["egui"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 semver = { version = "1", features = ["serde"] }
