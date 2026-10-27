@@ -1,6 +1,6 @@
 //! Golden fixtures for the theme install: the style in each egui slot per mode, and the tokens
-//! `Tokens::get` returns per mode and OS answer. Missing fixtures are written; `UPDATE_GOLDEN=1`
-//! rewrites them; otherwise the output must match byte for byte.
+//! `Tokens::get` returns per mode and OS answer. `UPDATE_GOLDEN=1` writes
+//! them; otherwise a missing fixture fails and the output must match byte for byte.
 
 use std::path::PathBuf;
 
@@ -9,12 +9,12 @@ use egui::Theme;
 
 fn fixture(name: &str, actual: &str) {
     let path = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/golden/theme").join(format!("{name}.txt"));
-    if std::env::var_os("UPDATE_GOLDEN").is_some() || !path.exists() {
+    if std::env::var_os("UPDATE_GOLDEN").is_some() {
         std::fs::create_dir_all(path.parent().expect("fixture dir")).expect("create fixture dir");
         std::fs::write(&path, actual).expect("write fixture");
         return;
     }
-    let expected = std::fs::read_to_string(&path).expect("read fixture");
+    let expected = std::fs::read_to_string(&path).unwrap_or_else(|_| panic!("fixture missing: {}; run with UPDATE_GOLDEN=1", path.display()));
     assert!(expected == actual, "{name} differs from {} (rerun with UPDATE_GOLDEN=1 to review the change)", path.display());
 }
 
