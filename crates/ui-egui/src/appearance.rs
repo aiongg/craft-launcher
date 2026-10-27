@@ -1,40 +1,31 @@
 //! The launcher's theme: its own choice or the Craft App Suite's, resolved and installed when it
-//! changes. The suite's selection comes from a [`SuiteWatch`] the desktop shell injects; without
-//! one (tests, web, portable installs) the suite lives in memory and "Follow suite" is not offered.
+//! changes. The suite's selection comes through a [`SuiteClient`] over the [`SuiteWatch`] the
+//! desktop shell injects; without one (tests, web, portable installs) the suite lives in memory
+//! and "Follow suite" is not offered.
 
-use craft_theme::{Selection, ThemeId};
-use craft_theme_store::{Accepted, Op, SelectionChange, Snapshot, StoreError, SuiteChoice, SuiteWatch};
+use craft_theme::Selection;
+use craft_theme_store::{Op, SelectionChange, SuiteClient, SuiteWatch};
+use egui::{RichText, Ui};
 
 use crate::app::LauncherUi;
-use crate::i18n::fmt;
-use crate::theme;
+use crate::i18n::{fmt, t};
+use crate::theme::{self, Tokens};
+use crate::widgets::{self, Kind};
 
-/// The suite's selection as the launcher last saw it, and what it is waiting for.
+/// The suite's selection as the launcher sees it.
 pub(crate) struct Suite {
-    pub(crate) watch: SuiteWatch,
+    pub(crate) client: SuiteClient,
     /// The suite folder is shared with the other Craft apps, so "Follow suite" is offered.
     pub(crate) shared: bool,
-    /// The generation `accepted` was taken from.
-    seen: Option<u64>,
-    pub(crate) accepted: Accepted,
-    /// A suite change sent to the store and the choice shown until its result arrives.
-    pending: Option<(u64, SuiteChoice)>,
-    /// The library theme last named with `Op::AppTheme`; `None` until one is sent.
-    app_theme_sent: Option<Option<ThemeId>>,
-    /// The suite generation and selection the installed styles were built for.
-    applied: Option<(u64, Selection)>,
+    /// The selection the installed styles were built for.
+    applied: Option<Selection>,
     /// The library was re-listed for the open Settings dialog.
     pub(crate) rescanned: bool,
 }
 
 impl Suite {
     pub(crate) fn new(watch: SuiteWatch, shared: bool) -> Self {
-        Self { watch, shared, seen: None, accepted: Accepted::default(), pending: None, app_theme_sent: None, applied: None, rescanned: false }
-    }
-
-    /// The suite's choice as shown: a change still on its way, else the accepted one.
-    pub(crate) fn choice(&self) -> &SuiteChoice {
-        self.pending.as_ref().map_or(&self.accepted.suite, |(_, choice)| choice)
+        Self { client: SuiteClient::new(watch), shared, applied: None, rescanned: false }
     }
 }
 
@@ -47,76 +38,90 @@ impl LauncherUi {
 
     /// The theme and mode the launcher draws with now.
     pub(crate) fn effective_appearance(&self) -> Selection {
-        self.settings.appearance().effective(self.suite.choice())
+        self.settings.appearance().effective(&self.suite.client.shown())
     }
 
     /// Installs the styles again when the suite or the launcher's choice changed (`force`: in any
     /// case, for a new context). One atomic load per frame otherwise.
     pub(crate) fn sync_appearance(&mut self, ctx: &egui::Context, force: bool) {
-        if self.suite.seen != Some(self.suite.watch.generation()) {
-            let snapshot = self.suite.watch.snapshot();
-            self.take_snapshot(&snapshot);
+        let changed = self.suite.client.sync();
+        if changed && self.suite.shared {
+            self.keep_last_suite();
         }
-        self.send_app_theme();
-        let sel = self.effective_appearance();
-        let key = (self.suite.watch.generation(), sel);
-        if !force && self.suite.applied.as_ref() == Some(&key) {
+        let appearance = self.settings.appearance();
+        self.suite.client.set_app_theme(appearance.own_choice().map(|own| own.theme.clone()));
+        let mut sel = self.effective_appearance();
+        // The launcher's own library theme is still loading: keep the current look.
+        if self.suite.client.is_loading(&sel.theme)
+            && let Some(applied) = &self.suite.applied
+        {
+            if !force {
+                return;
+            }
+            sel = applied.clone();
+        }
+        if !force && !changed && self.suite.applied.as_ref() == Some(&sel) {
             return;
         }
-        let snapshot = self.suite.watch.snapshot();
-        theme::install_selection(ctx, &key.1, &|id| snapshot.theme(id));
-        self.settings.theme = key.1.mode.into();
-        self.suite.applied = Some(key);
+        let client = &self.suite.client;
+        theme::install_selection(ctx, &sel, &|id| client.theme(id));
+        self.settings.theme = sel.mode.into();
+        self.suite.applied = Some(sel);
     }
 
-    fn take_snapshot(&mut self, snapshot: &Snapshot) {
-        self.suite.seen = Some(snapshot.generation);
-        self.suite.accepted = snapshot.accepted.clone();
-        if let Some((id, _)) = &self.suite.pending
-            && let Some(result) = snapshot.result(*id)
+    /// Kept in the settings, so a damaged or newer suite file at the next start still shows the
+    /// last look.
+    fn keep_last_suite(&mut self) {
+        let accepted = self.suite.client.accepted();
+        if let Some(appearance) = self.settings.appearance.as_mut()
+            && appearance.last_suite != *accepted
         {
-            if let Err(e) = result {
-                let text = match e {
-                    StoreError::Conflict { .. } => crate::i18n::t("Changed in another Craft app; your choice wasn't applied").to_string(),
-                    e => fmt(crate::i18n::t("Couldn't change the suite theme: {e}"), &[("e", &e.to_string())]),
-                };
-                self.toast(text, true);
-            }
-            self.suite.pending = None;
-        }
-        // Kept in the settings, so a damaged or newer suite file at the next start still shows
-        // the last look.
-        if self.suite.shared
-            && let Some(appearance) = self.settings.appearance.as_mut()
-            && appearance.last_suite != snapshot.accepted
-        {
-            appearance.last_suite = snapshot.accepted.clone();
-        }
-    }
-
-    /// Names the library theme of the launcher's own choice, so the watcher keeps it parsed.
-    fn send_app_theme(&mut self) {
-        let appearance = self.settings.appearance();
-        let wanted = appearance.own_choice().map(|own| own.theme.clone()).filter(|id| !id.is_builtin());
-        if self.suite.app_theme_sent.as_ref() != Some(&wanted) {
-            self.suite.watch.request(Op::AppTheme(wanted.clone()));
-            self.suite.app_theme_sent = Some(wanted);
+            appearance.last_suite = accepted.clone();
         }
     }
 
     /// Changes the suite's selection: shown at once, written by the watcher.
     pub(crate) fn change_suite(&mut self, change: SelectionChange) {
-        let base = self.suite.accepted.clone();
-        let shown = change.applied_to(self.suite.choice());
-        let id = self.suite.watch.request(Op::Update { base, change });
-        self.suite.pending = Some((id, shown));
+        self.suite.client.change(change);
     }
 
     /// Re-lists the library once each time the Settings dialog opens.
     pub(crate) fn rescan_suite_library(&mut self) {
         if !self.suite.rescanned {
-            self.suite.watch.request(Op::Rescan);
+            self.suite.client.watch().request(Op::Rescan);
             self.suite.rescanned = true;
+        }
+    }
+
+    /// Under the Appearance choices: a suite change another app's choice blocked ("Apply mine"),
+    /// one that failed ("Retry"), and the suite files that can't be used.
+    pub(crate) fn suite_notices(&mut self, ui: &mut Ui) {
+        let tokens = Tokens::get(ui.ctx());
+        let client = &self.suite.client;
+        let notice = if client.conflict().is_some() {
+            Some((t("Changed in another Craft app; your choice wasn't applied").to_string(), t("Apply mine")))
+        } else {
+            client.failure().map(|(_, e)| (fmt(t("Couldn't change the suite theme: {e}"), &[("e", &e.to_string())]), t("Retry")))
+        };
+        let problems: Vec<String> = client.problems().iter().map(ToString::to_string).collect();
+        if let Some((text, action)) = notice {
+            ui.add_space(6.0);
+            ui.add(egui::Label::new(RichText::new(text).size(12.0).color(tokens.warn)).wrap());
+            ui.horizontal(|ui| {
+                if widgets::button(ui, action, Kind::Secondary, 0.0).clicked() {
+                    // Only one of the two is set; each does nothing without its notice.
+                    self.suite.client.apply_mine();
+                    self.suite.client.retry();
+                }
+                if widgets::button(ui, t("Dismiss"), Kind::Secondary, 0.0).clicked() {
+                    self.suite.client.dismiss();
+                }
+            });
+        }
+        if !problems.is_empty() {
+            ui.add_space(6.0);
+            let line = problems.join("; ");
+            ui.add(egui::Label::new(RichText::new(&line).size(12.0).color(tokens.muted)).truncate()).on_hover_text(line);
         }
     }
 }

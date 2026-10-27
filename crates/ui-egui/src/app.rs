@@ -1332,7 +1332,7 @@ mod tests {
         let graphite = ThemeId::parse("craft.graphite").unwrap();
         launcher.change_suite(craft_theme_store::SelectionChange::theme(graphite.clone()));
         assert_eq!(drawn_tokens(&mut launcher, &ctx, 0.2), builtin_tokens("craft.graphite", Variant::Dark));
-        assert_eq!(launcher.suite.accepted.suite.theme.as_ref(), Some(&graphite), "the suite store took the change");
+        assert_eq!(launcher.suite.client.accepted().suite.theme.as_ref(), Some(&graphite), "the suite store took the change");
 
         let mut appearance = launcher.settings.appearance();
         appearance.follow_suite = false;
@@ -1368,10 +1368,10 @@ mod tests {
 
     /// Passes every 50 ms while the watcher's worker reads the folder, until `done` holds or after
     /// `passes`. Returns whether `done` held.
-    fn frames_until(launcher: &mut LauncherUi, ctx: &egui::Context, passes: u32, mut done: impl FnMut(&egui::Context) -> bool) -> bool {
+    fn frames_until(launcher: &mut LauncherUi, ctx: &egui::Context, passes: u32, mut done: impl FnMut(&LauncherUi, &egui::Context) -> bool) -> bool {
         for i in 0..passes {
             frame(launcher, ctx, 1.0 + f64::from(i) * 0.05);
-            if done(ctx) {
+            if done(launcher, ctx) {
                 return true;
             }
             std::thread::sleep(std::time::Duration::from_millis(50));
@@ -1392,7 +1392,7 @@ mod tests {
         let options = craft_theme_store::StoreOptions::new("artcraft-launcher test");
         launcher.set_suite(craft_theme_store::SuiteWatch::open(&craft_theme_store::SuiteDir::at(&dir), options, || {}), true);
         // Longer than the watcher's first stat of the folder.
-        frames_until(&mut launcher, &ctx, 20, |_| false);
+        frames_until(&mut launcher, &ctx, 20, |_, _| false);
         assert_eq!(Tokens::get(&ctx), builtin_tokens("craft.artcraft", Variant::Dark), "nothing chosen yet: ArtCraft, dark");
         assert!(folder_contents(&dir).is_empty(), "starting wrote to the suite folder");
 
@@ -1405,14 +1405,52 @@ mod tests {
         std::fs::write(dir.join("selection.json"), &selection).unwrap();
         let written = folder_contents(&dir);
         let sample = sample_roles(Variant::Dark);
-        let shown = frames_until(&mut launcher, &ctx, 200, |ctx| Tokens::get(ctx).bg == craft_ui::theme::color32(sample.background));
-        assert!(shown, "the suite's theme never showed: {:?}", launcher.suite.watch.snapshot());
+        let shown = frames_until(&mut launcher, &ctx, 200, |_, ctx| Tokens::get(ctx).bg == craft_ui::theme::color32(sample.background));
+        assert!(shown, "the suite's theme never showed: {:?}", launcher.suite.client.snapshot());
         let t = Tokens::get(&ctx);
         assert_eq!(
             [t.ink, t.bg, t.accent, t.good, t.warn, t.bad],
             [sample.text, sample.background, sample.accent, sample.good, sample.warn, sample.bad].map(craft_ui::theme::color32)
         );
         assert_eq!(folder_contents(&dir), written, "following the suite changed its files");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// Another Craft app picks a suite theme while the launcher's pick is on its way: the launcher
+    /// shows the conflict, and "Apply mine" makes its choice win in the folder and on screen.
+    #[test]
+    fn a_conflicting_suite_change_is_shown_and_apply_mine_wins() {
+        use craft_theme::{ThemeId, Variant};
+        let dir = std::env::temp_dir().join(format!("artcraft-launcher-suite-conflict-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let (mut launcher, _sent, ctx) = launcher();
+        let options = craft_theme_store::StoreOptions::new("artcraft-launcher test");
+        launcher.set_suite(craft_theme_store::SuiteWatch::open(&craft_theme_store::SuiteDir::at(&dir), options, || {}), true);
+        frames_until(&mut launcher, &ctx, 20, |_, _| false);
+
+        // The other app's write lands after the launcher's view of the suite was taken and before
+        // its change runs, which is when a real conflict happens: the change's base is out of date.
+        let other = r#"{ "schema_version": 1, "revision": 1, "library_revision": 0, "suite": { "theme": "craft.high-contrast" }, "written_by": "other app" }"#;
+        std::fs::write(dir.join("selection.json"), other).unwrap();
+        let graphite = ThemeId::parse("craft.graphite").unwrap();
+        launcher.change_suite(craft_theme_store::SelectionChange::theme(graphite.clone()));
+        let noticed = frames_until(&mut launcher, &ctx, 100, |l, _| l.suite.client.conflict().is_some());
+        assert!(noticed, "no conflict notice: {:?}", launcher.suite.client.snapshot());
+        let (disk, mine) = launcher.suite.client.conflict().cloned().unwrap();
+        assert_eq!(disk.suite.theme.as_ref().map(ThemeId::as_str), Some("craft.high-contrast"));
+        assert_eq!(mine.theme.as_ref(), Some(&graphite));
+
+        launcher.suite.client.apply_mine();
+        let graphite_dark = builtin_tokens("craft.graphite", Variant::Dark);
+        let won = frames_until(&mut launcher, &ctx, 100, |_, ctx| Tokens::get(ctx) == graphite_dark);
+        assert!(won, "apply mine never showed: {:?}", launcher.suite.client.snapshot());
+        let written = frames_until(&mut launcher, &ctx, 100, |_, _| {
+            std::fs::read_to_string(dir.join("selection.json")).is_ok_and(|text| text.contains("craft.graphite"))
+        });
+        assert!(written, "the folder doesn't hold the launcher's choice");
+        assert!(launcher.suite.client.conflict().is_none());
+        assert_eq!(launcher.suite.client.accepted().suite.theme.as_ref(), Some(&graphite));
         let _ = std::fs::remove_dir_all(&dir);
     }
 

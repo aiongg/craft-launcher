@@ -354,7 +354,7 @@ impl LauncherUi {
     /// follows it; otherwise it is the launcher's own.
     fn settings_appearance(&mut self, ui: &mut Ui) {
         self.rescan_suite_library();
-        let index = self.suite.watch.snapshot().index.clone();
+        let index = self.suite.client.snapshot().index.clone();
         let mut appearance = self.settings.appearance();
         let shown = self.effective_appearance();
         let following = appearance.follow_suite && self.suite.shared;
@@ -386,6 +386,7 @@ impl LauncherUi {
             ui.horizontal(|ui| {
                 widgets::cells(ui, &mut mode, &ThemeChoice::ALL.map(|c| (c, Cell { label: c.label(), tip: c.label(), count: None })));
             });
+            self.suite_notices(ui);
         });
         let picked = themes.into_iter().nth(picked_theme).map(|(id, _)| id).filter(|id| *id != shown.theme);
         let mode = Some(Mode::from(mode)).filter(|m| *m != shown.mode);
