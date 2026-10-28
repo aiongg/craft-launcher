@@ -2,6 +2,8 @@ Tokens {
     dark: true,
     bg: #12_13_16_FF,
     sunken: #06_06_07_FF,
+    hover: #06_06_07_FF,
+    pressed: #06_06_07_FF,
     ink: #F2_F1_EE_FF,
     ink_strong: #FF_FF_FF_FF,
     muted: #91_91_8F_99,

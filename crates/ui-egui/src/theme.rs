@@ -90,6 +90,10 @@ pub struct Tokens {
     pub bg: Color32,
     /// Badges, wells and row hovers.
     pub sunken: Color32,
+    /// Fill of a hovered control.
+    pub hover: Color32,
+    /// Fill of a pressed or open control.
+    pub pressed: Color32,
     /// Body text.
     pub ink: Color32,
     /// Headings.
@@ -133,6 +137,8 @@ impl Tokens {
         dark: true,
         bg: hex(0x121316),
         sunken: hex(0x060607),
+        hover: hex(0x060607),
+        pressed: hex(0x060607),
         ink: hex(0xf2f1ee),
         ink_strong: hex(0xffffff),
         muted: ink_alpha(0xf2f1ee, 153),
@@ -155,6 +161,8 @@ impl Tokens {
         dark: false,
         bg: hex(0xf2f1ee),
         sunken: hex(0xe9e8e4),
+        hover: hex(0xe9e8e4),
+        pressed: hex(0xe9e8e4),
         ink: hex(0x101014),
         ink_strong: hex(0x000000),
         muted: ink_alpha(0x101014, 158),
@@ -191,6 +199,8 @@ impl Tokens {
             dark,
             bg: color32(roles.background),
             sunken: color32(roles.surface),
+            hover: color32(derived.hover),
+            pressed: color32(derived.pressed),
             ink: color32(roles.text),
             ink_strong: color32(roles.text.lerp_gamma(extreme, 0.5)),
             muted: color32(roles.text_muted),
@@ -305,9 +315,9 @@ fn visuals(t: &Tokens) -> Visuals {
     for (w, fill, stroke, fg) in [
         (&mut v.widgets.noninteractive, t.bg, t.line, t.muted),
         (&mut v.widgets.inactive, t.bg, t.line, t.ink),
-        (&mut v.widgets.hovered, t.sunken, t.line_strong, t.ink_strong),
-        (&mut v.widgets.active, t.sunken, t.line_strong, t.ink_strong),
-        (&mut v.widgets.open, t.sunken, t.line_strong, t.ink_strong),
+        (&mut v.widgets.hovered, t.hover, t.line_strong, t.ink_strong),
+        (&mut v.widgets.active, t.pressed, t.line_strong, t.ink_strong),
+        (&mut v.widgets.open, t.pressed, t.line_strong, t.ink_strong),
     ] {
         w.bg_fill = fill;
         w.weak_bg_fill = fill;
