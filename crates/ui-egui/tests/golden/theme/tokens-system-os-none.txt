@@ -13,6 +13,7 @@ Tokens {
     accent: #2D_81_FF_FF,
     accent_ink: #74_AA_FF_FF,
     on_accent: #FF_FF_FF_FF,
+    focus: #FF_FF_FF_FF,
     selection: #2D_81_FF_FF,
     invert_bg: #FF_FF_FF_FF,
     invert_fg: #0B_0B_0C_FF,

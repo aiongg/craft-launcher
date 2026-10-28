@@ -112,6 +112,8 @@ pub struct Tokens {
     pub accent_ink: Color32,
     /// Text and icons on `accent`.
     pub on_accent: Color32,
+    /// Keyboard focus ring.
+    pub focus: Color32,
     /// Selected text's background.
     pub selection: Color32,
     /// Primary buttons and hover inversion.
@@ -148,6 +150,7 @@ impl Tokens {
         accent: hex(0x2d81ff),
         accent_ink: hex(0x74aaff),
         on_accent: Color32::WHITE,
+        focus: Color32::WHITE,
         selection: hex(0x2d81ff),
         invert_bg: hex(0xffffff),
         invert_fg: hex(0x0b0b0c),
@@ -172,6 +175,7 @@ impl Tokens {
         accent: hex(0x2d81ff),
         accent_ink: hex(0x1659c4),
         on_accent: Color32::WHITE,
+        focus: Color32::WHITE,
         selection: hex(0x2d81ff),
         invert_bg: hex(0x101014),
         invert_fg: hex(0xf2f1ee),
@@ -210,6 +214,7 @@ impl Tokens {
             accent: color32(roles.accent),
             accent_ink: color32(derived.accent_text),
             on_accent: color32(roles.on_accent),
+            focus: color32(roles.focus),
             selection: color32(roles.selection),
             invert_bg: color32(roles.text),
             invert_fg: color32(roles.background),
@@ -309,7 +314,7 @@ fn visuals(t: &Tokens) -> Visuals {
     v.override_text_color = Some(t.ink);
     v.hyperlink_color = t.accent_ink;
     v.selection.bg_fill = t.selection;
-    v.selection.stroke = Stroke::new(1.0, t.on_accent);
+    v.selection.stroke = Stroke::new(1.0, t.focus);
     v.warn_fg_color = t.warn;
     v.error_fg_color = t.bad;
     for (w, fill, stroke, fg) in [
