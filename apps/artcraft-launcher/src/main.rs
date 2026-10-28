@@ -5,6 +5,7 @@
 #![cfg_attr(windows, windows_subsystem = "windows")]
 #![deny(clippy::unwrap_used, clippy::expect_used, clippy::panic, clippy::unimplemented, clippy::todo, clippy::unreachable)]
 
+mod capture;
 mod logging;
 mod motion;
 mod settings_file;
@@ -747,6 +748,8 @@ struct Shell<'a> {
     /// The "show on the current desktop" setting last applied to the window (macOS).
     #[cfg_attr(not(target_os = "macos"), allow(dead_code))]
     applied_follow: Option<bool>,
+    /// Set by `ARTCRAFT_LAUNCHER_CAPTURE`: save one window image, then quit.
+    capture: Option<capture::Capture>,
 }
 
 impl<'a> Shell<'a> {
@@ -754,7 +757,7 @@ impl<'a> Shell<'a> {
         let window_hides = window_can_hide(cc.display_handle().ok().map(|d| d.as_raw()));
         // Started hidden at login but there's no tray to come back from: show the window.
         let visible = !hidden || launcher.tray.is_none();
-        let mut shell = Self { launcher, window_hides, visible: true, quitting: false, applied_follow: None };
+        let mut shell = Self { launcher, window_hides, visible: true, quitting: false, applied_follow: None, capture: capture::Capture::from_env() };
         if !visible {
             shell.put_away(&cc.egui_ctx);
         } else if hidden {
@@ -804,6 +807,12 @@ impl<'a> Shell<'a> {
 impl eframe::App for Shell<'_> {
     fn logic(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         let requests = self.launcher.tick(ctx);
+        if let Some(capture) = &mut self.capture
+            && matches!(capture.step(ctx), capture::Step::Done)
+        {
+            self.capture = None;
+            self.quit(ctx);
+        }
         #[cfg(target_os = "macos")]
         if self.applied_follow != Some(self.launcher.ui.settings.show_on_current_desktop) {
             let on = self.launcher.ui.settings.show_on_current_desktop;
@@ -1149,7 +1158,7 @@ mod tests {
     fn quitting_overrides_a_close_to_the_tray() {
         let (mut launcher, _show, _) = launcher();
         let ctx = launcher.windowless.clone();
-        let mut shell = Shell { launcher: &mut launcher, window_hides: false, visible: true, quitting: false, applied_follow: None };
+        let mut shell = Shell { launcher: &mut launcher, window_hides: false, visible: true, quitting: false, applied_follow: None, capture: None };
         shell.put_away(&ctx);
         assert!(shell.launcher.closed_to_tray);
         shell.quit(&ctx);
@@ -1160,7 +1169,7 @@ mod tests {
     fn a_window_that_hides_is_not_closed_to_the_tray() {
         let (mut launcher, _show, _) = launcher();
         let ctx = launcher.windowless.clone();
-        let mut shell = Shell { launcher: &mut launcher, window_hides: true, visible: true, quitting: false, applied_follow: None };
+        let mut shell = Shell { launcher: &mut launcher, window_hides: true, visible: true, quitting: false, applied_follow: None, capture: None };
         shell.put_away(&ctx);
         assert!(!shell.visible);
         assert!(!shell.launcher.closed_to_tray);

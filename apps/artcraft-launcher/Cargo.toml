@@ -19,6 +19,7 @@ local-mirror = ["artcraft-launcher-native/local-mirror"]
 [dependencies]
 artcraft-launcher-core = { workspace = true }
 artcraft-launcher-ui-egui = { workspace = true }
+craft-ui = { workspace = true }
 artcraft-launcher-native = { workspace = true }
 eframe = { workspace = true, features = ["default_fonts", "clipboard", "wgpu", "accesskit", "wayland", "x11", "persistence", "links"] }
 egui = { workspace = true }

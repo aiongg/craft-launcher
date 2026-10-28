@@ -280,6 +280,7 @@ dependencies = [
  "craft-platform",
  "craft-quit",
  "craft-theme-store",
+ "craft-ui",
  "eframe",
  "egui",
  "env_logger",
