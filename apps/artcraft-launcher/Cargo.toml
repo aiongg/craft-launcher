@@ -35,7 +35,7 @@ craft-theme-store = { workspace = true }
 # `restore-egui`: the window-restore store and its eframe tracker (wgpu, as the launcher renders).
 craft-window = { workspace = true, features = ["restore-egui"] }
 craft-ui = { workspace = true }
-craft-quit = { version = "0.1.0", git = "https://github.com/aiongg/craft-libs", rev = "b105d7cbb67f22c6327799baba7a065737fd4fd6", features = ["egui"] }
+craft-quit = { version = "0.1.0", git = "https://github.com/aiongg/craft-libs", rev = "08f0f2bc863b9e46429b7c4b698d4c38f69b8d3b", features = ["egui"] }
 
 # The tray (menu bar) icon. On Linux and the BSDs the StatusNotifierItem backend talks D-Bus
 # directly, so no GTK or libappindicator is needed.
