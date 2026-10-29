@@ -638,7 +638,7 @@ impl LauncherUi {
         if self.install_choice_before.as_ref().is_some_and(|(id, _)| *id == app)
             && let Some((id, before)) = self.install_choice_before.take()
             && result.is_err()
-            && self.downgrade_unsupported(&id)
+            && self.chosen_is_older(&id)
         {
             self.restore_version_choice(id, before);
         }

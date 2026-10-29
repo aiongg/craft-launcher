@@ -85,12 +85,18 @@ impl LauncherUi {
         installed.is_some() && installed == self.chosen_version(id).as_ref()
     }
 
-    /// The chosen version is older than the installed one and this kind of install can't go back
-    /// (the backend only does it for a Windows Installer copy).
+    /// The chosen version is older than the installed one.
+    pub(crate) fn chosen_is_older(&self, id: &str) -> bool {
+        let installed = self.entry(id).and_then(|e| e.installed.as_ref()).and_then(|i| i.version.as_ref());
+        installed.zip(self.chosen_version(id)).is_some_and(|(installed, chosen)| version::is_newer(installed, &chosen))
+    }
+
+    /// The chosen version is older than the installed one and this kind of install can't go back:
+    /// only a Windows Installer copy or a macOS app does (the rule of the backend's downgrade check).
     pub(crate) fn downgrade_unsupported(&self, id: &str) -> bool {
+        use artcraft_launcher_core::InstallSource::{MacApp, Msi};
         let Some(inst) = self.entry(id).and_then(|e| e.installed.as_ref()) else { return false };
-        let (Some(installed), Some(chosen)) = (inst.version.as_ref(), self.chosen_version(id)) else { return false };
-        inst.source != artcraft_launcher_core::InstallSource::Msi && version::is_newer(installed, &chosen)
+        !matches!(inst.source, Msi | MacApp) && self.chosen_is_older(id)
     }
 
     /// The dialog's Install button for the chosen version: its label, and whether that exact release
