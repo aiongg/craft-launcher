@@ -23,6 +23,10 @@ impl LauncherUi {
         ui.add_space(10.0);
         ui.label(RichText::new(tl!("Your files may not open in older versions.")).color(t.muted));
         ui.label(RichText::new(tl!("Enable automatic installs in Settings to follow new nightly builds.")).color(t.muted));
+        if self.downgrade_unsupported(id) {
+            ui.add_space(6.0);
+            ui.label(RichText::new(tl!("Going back to an older version isn't available for this kind of install yet.")).color(t.bad));
+        }
         ui.add_space(12.0);
         let (mut close, mut install) = (false, false);
         ui.horizontal(|ui| {
@@ -36,7 +40,7 @@ impl LauncherUi {
         if install {
             // Installing keeps the new choice. May open the folder dialog in this one's place;
             // `dialogs` keeps it.
-            self.version_before = None;
+            self.install_choice_before = self.version_before.take();
             self.install_app(id);
             return true;
         }
@@ -45,8 +49,17 @@ impl LauncherUi {
 
     /// The dialog closed without installing: the choice made in it was only a draft, so put the
     /// one it had before back, and check again so the card shows that release (Open, not Install).
+    /// Choosing the installed version is final: it is what the card shows anyway.
     pub(crate) fn revert_version_choice(&mut self) {
         let Some((id, before)) = self.version_before.take() else { return };
+        if self.chosen_is_installed(&id) {
+            return;
+        }
+        self.restore_version_choice(id, before);
+    }
+
+    /// Puts `before` back as `id`'s chosen version and checks again.
+    pub(crate) fn restore_version_choice(&mut self, id: String, before: VersionTrack) {
         if self.settings.versions.get(&id).cloned().unwrap_or_default() == before {
             return;
         }
@@ -57,6 +70,27 @@ impl LauncherUi {
         }
         self.configure();
         self.check_now_from_ui();
+    }
+
+    /// The version `id`'s current choice resolves to, from the exact pin or the checked release.
+    fn chosen_version(&self, id: &str) -> Option<version::Version> {
+        match self.settings.versions.get(id) {
+            Some(VersionTrack::Pinned(tag)) => version::parse(tag),
+            _ => self.entry(id)?.release()?.version.clone(),
+        }
+    }
+
+    fn chosen_is_installed(&self, id: &str) -> bool {
+        let installed = self.entry(id).and_then(|e| e.installed.as_ref()).and_then(|i| i.version.as_ref());
+        installed.is_some() && installed == self.chosen_version(id).as_ref()
+    }
+
+    /// The chosen version is older than the installed one and this kind of install can't go back
+    /// (the backend only does it for a Windows Installer copy).
+    pub(crate) fn downgrade_unsupported(&self, id: &str) -> bool {
+        let Some(inst) = self.entry(id).and_then(|e| e.installed.as_ref()) else { return false };
+        let (Some(installed), Some(chosen)) = (inst.version.as_ref(), self.chosen_version(id)) else { return false };
+        inst.source != artcraft_launcher_core::InstallSource::Msi && version::is_newer(installed, &chosen)
     }
 
     /// The dialog's Install button for the chosen version: its label, and whether that exact release
@@ -81,7 +115,7 @@ impl LauncherUi {
         if installed.is_some() && installed == version::parse(&tag).as_ref() {
             return Some((tl!("Installed").to_string(), false));
         }
-        let ready = release.is_some_and(|r| r.tag == tag) && entry.has_download(self.platform);
+        let ready = release.is_some_and(|r| r.tag == tag) && entry.has_download(self.platform) && !self.downgrade_unsupported(id);
         Some((crate::fmt(tl!("Install version {version}"), &[("version", &tag)]), ready))
     }
 
